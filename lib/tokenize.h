@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2018 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -504,8 +504,6 @@ public:
      */
     const Token * isFunctionHead(const Token *tok, const std::string &endsWith) const;
 
-private:
-
     /**
      * is token pointing at function head?
      * @param tok         A '(' or ')' token in a possible function head
@@ -514,6 +512,8 @@ private:
      * @return token matching with endsWith if syntax seems to be a function head else nullptr
      */
     static const Token * isFunctionHead(const Token *tok, const std::string &endsWith, bool cpp);
+
+private:
 
     /**
      * simplify "while (0)"
@@ -718,6 +718,9 @@ private:
      */
     void printUnknownTypes() const;
 
+    /** Find end of SQL (or PL/SQL) block */
+    static const Token *findSQLBlockEnd(const Token *tokSQLStart);
+
 public:
 
     /** Was there templates in the code? */
@@ -764,16 +767,6 @@ public:
     const Token* tokens() const {
         return list.front();
     }
-
-    /**
-     * Copy tokens.
-     * @param dest destination token where copied tokens will be inserted after
-     * @param first first token to copy
-     * @param last last token to copy
-     * @param one_line true=>copy all tokens to the same line as dest. false=>copy all tokens to dest while keeping the 'line breaks'
-     * @return new location of last token copied
-     */
-    static Token *copyTokens(Token *dest, const Token *first, const Token *last, bool one_line = true);
 
     /**
     * Helper function to check whether number is zero (0 or 0.0 or 0E+0) or not?

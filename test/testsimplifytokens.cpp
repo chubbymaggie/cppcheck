@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -3065,6 +3065,13 @@ private:
         {
             const char code[] = "void f() { int A(1),B(2),C=3,D,E(5),F=6; }";
             const char expected[] = "void f ( ) { int A ; A = 1 ; int B ; B = 2 ; int C ; C = 3 ; int D ; int E ; E = 5 ; int F ; F = 6 ; }";
+            ASSERT_EQUALS(expected, tok(code, false));
+        }
+
+        // ticket #8284
+        {
+            const char code[] = "void f() { class : foo<int> { } abc; }";
+            const char expected[] = "void f ( ) { class Anonymous0 : foo < int > { } ; Anonymous0 abc ; }";
             ASSERT_EQUALS(expected, tok(code, false));
         }
     }

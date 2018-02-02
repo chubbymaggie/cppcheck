@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -59,6 +59,7 @@ public:
         checkCondition.checkIncorrectLogicOperator();
         checkCondition.checkInvalidTestForOverflow();
         checkCondition.alwaysTrueFalse();
+        checkCondition.checkPointerAdditionResultNotNull();
     }
 
     /** @brief Run checks against the simplified token list */
@@ -113,6 +114,9 @@ public:
     /** @brief %Check for invalid test for overflow 'x+100 < x' */
     void checkInvalidTestForOverflow();
 
+    /** @brief Check if pointer addition result is NULL '(ptr + 1) == NULL' */
+    void checkPointerAdditionResultNotNull();
+
 private:
     bool isAliased(const std::set<unsigned int> &vars) const;
     bool isOverlappingCond(const Token * const cond1, const Token * const cond2, bool pure) const;
@@ -138,9 +142,10 @@ private:
 
     void clarifyConditionError(const Token *tok, bool assign, bool boolop);
 
-    void alwaysTrueFalseError(const Token *tok, bool knownResult);
+    void alwaysTrueFalseError(const Token *tok, const ValueFlow::Value *value);
 
     void invalidTestForOverflow(const Token* tok, bool result);
+    void pointerAdditionResultNotNullError(const Token *tok, const Token *calc);
 
     void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings) const {
         CheckCondition c(nullptr, settings, errorLogger);
@@ -156,8 +161,9 @@ private:
         c.redundantConditionError(nullptr, "If x > 11 the condition x > 10 is always true.", false);
         c.moduloAlwaysTrueFalseError(nullptr, "1");
         c.clarifyConditionError(nullptr, true, false);
-        c.alwaysTrueFalseError(nullptr, true);
+        c.alwaysTrueFalseError(nullptr, nullptr);
         c.invalidTestForOverflow(nullptr, false);
+        c.pointerAdditionResultNotNullError(nullptr, nullptr);
     }
 
     static std::string myName() {
@@ -177,7 +183,7 @@ private:
                "- Mutual exclusion over || always evaluating to true\n"
                "- Comparisons of modulo results that are always true/false.\n"
                "- Known variable values => condition is always true/false\n"
-               "- Invalid test for overflow (for example 'ptr+u < ptr'). Condition is always false unless there is overflow, and overflow is UB.\n";
+               "- Invalid test for overflow (for example 'ptr+u < ptr'). Condition is always false unless there is overflow, and overflow is undefined behaviour.\n";
     }
 };
 /// @}

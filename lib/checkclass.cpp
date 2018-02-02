@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -573,11 +573,6 @@ void CheckClass::initializeVarList(const Function &func, std::list<const Functio
             assignVar(ftok->next()->varId(), scope, usage);
         }
 
-        // Before a new statement there is "[{};()=[]" or ::
-        // We can also have a new statement after any operators or comparisons
-        if (! Token::Match(ftok, "%op%|%comp%|{|}|;|(|)|=|[|::"))
-            continue;
-
         // If assignment comes after an && or || this is really inconclusive because of short circuiting
         if (Token::Match(ftok, "%oror%|&&"))
             continue;
@@ -941,8 +936,9 @@ static bool checkFunctionUsage(const Function *privfunc, const Scope* scope)
             return true;
     }
 
-    for (std::list<Type*>::const_iterator i = scope->definedTypes.begin(); i != scope->definedTypes.end(); ++i) {
-        const Type *type = *i;
+    const std::map<std::string, Type*>::const_iterator end = scope->definedTypesMap.end();
+    for (std::map<std::string, Type*>::const_iterator iter = scope->definedTypesMap.begin(); iter != end; ++ iter) {
+        const Type *type = (*iter).second;
         if (type->enclosingScope == scope && checkFunctionUsage(privfunc, type->classScope))
             return true;
     }
@@ -2383,6 +2379,12 @@ void CheckClass::duplInheritedMembersError(const Token *tok1, const Token* tok2,
 // Check that copy constructor and operator defined together
 //---------------------------------------------------------------------------
 
+enum CtorType {
+    NO,
+    WITHOUT_BODY,
+    WITH_BODY
+};
+
 void CheckClass::checkCopyCtorAndEqOperator()
 {
     if (!_settings->isEnabled(Settings::WARNING))
@@ -2402,24 +2404,33 @@ void CheckClass::checkCopyCtorAndEqOperator()
         if (!hasNonStaticVars)
             continue;
 
-        int hasCopyCtor = 0;
-        int hasAssignmentOperator = 0;
+        CtorType copyCtors = CtorType::NO;
+        bool moveCtor = false;
+        CtorType assignmentOperators = CtorType::NO;
 
         std::list<Function>::const_iterator func;
         for (func = scope->functionList.begin(); func != scope->functionList.end(); ++func) {
-            if (!hasCopyCtor && func->type == Function::eCopyConstructor) {
-                hasCopyCtor = func->hasBody() ? 2 : 1;
+            if (copyCtors == CtorType::NO && func->type == Function::eCopyConstructor) {
+                copyCtors = func->hasBody() ? CtorType::WITH_BODY : CtorType::WITHOUT_BODY;
             }
-            if (!hasAssignmentOperator && func->type == Function::eOperatorEqual) {
+            if (assignmentOperators == CtorType::NO && func->type == Function::eOperatorEqual) {
                 const Variable * variable = func->getArgumentVar(0);
                 if (variable && variable->type() && variable->type()->classScope == scope) {
-                    hasAssignmentOperator = func->hasBody() ? 2 : 1;
+                    assignmentOperators = func->hasBody() ? CtorType::WITH_BODY : CtorType::WITHOUT_BODY;
                 }
+            }
+            if (func->type == Function::eMoveConstructor) {
+                moveCtor = true;
+                break;
             }
         }
 
-        if (std::abs(hasCopyCtor - hasAssignmentOperator) == 2)
-            copyCtorAndEqOperatorError(scope->classDef, scope->className, scope->type == Scope::eStruct, hasCopyCtor != 0);
+        if (moveCtor)
+            continue;
+
+        if ((copyCtors == CtorType::WITH_BODY && assignmentOperators == CtorType::NO) ||
+            (copyCtors == CtorType::NO && assignmentOperators == CtorType::WITH_BODY))
+            copyCtorAndEqOperatorError(scope->classDef, scope->className, scope->type == Scope::eStruct, copyCtors == CtorType::WITH_BODY);
     }
 }
 
@@ -2431,4 +2442,50 @@ void CheckClass::copyCtorAndEqOperatorError(const Token *tok, const std::string 
                                 "'.";
 
     reportError(tok, Severity::warning, "copyCtorAndEqOperator", message);
+}
+
+void CheckClass::checkUnsafeClassDivZero(bool test)
+{
+    // style severity: it is a style decision if classes should be safe or
+    // if users should be required to be careful. I expect that many users
+    // will disagree about these reports.
+    if (!_settings->isEnabled(Settings::STYLE))
+        return;
+
+    const std::size_t classes = symbolDatabase->classAndStructScopes.size();
+    for (std::size_t i = 0; i < classes; ++i) {
+        const Scope * classScope = symbolDatabase->classAndStructScopes[i];
+        if (!test && classScope->classDef->fileIndex() != 1)
+            continue;
+        std::list<Function>::const_iterator func;
+        for (func = classScope->functionList.begin(); func != classScope->functionList.end(); ++func) {
+            if (func->access != AccessControl::Public)
+                continue;
+            if (!func->hasBody())
+                continue;
+            if (func->name().compare(0,8,"operator")==0)
+                continue;
+            for (const Token *tok = func->functionScope->classStart; tok; tok = tok->next()) {
+                if (Token::Match(tok, "if|switch|while|for|do|}"))
+                    break;
+                if (tok->str() != "/")
+                    continue;
+                if (!tok->valueType() || !tok->valueType()->isIntegral())
+                    continue;
+                if (!tok->astOperand2())
+                    continue;
+                const Variable *var = tok->astOperand2()->variable();
+                if (!var || !var->isArgument())
+                    continue;
+                unsafeClassDivZeroError(tok, classScope->className, func->name(), var->name());
+                break;
+            }
+        }
+    }
+}
+
+void CheckClass::unsafeClassDivZeroError(const Token *tok, const std::string &className, const std::string &methodName, const std::string &varName)
+{
+    const std::string s = className + "::" + methodName + "()";
+    reportError(tok, Severity::style, "unsafeClassDivZero", "Public interface of " + className + " is not safe. When calling " + s + ", if parameter " + varName + " is 0 that leads to division by zero.");
 }

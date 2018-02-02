@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2018 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -78,7 +78,7 @@
 /*static*/ FILE* CppCheckExecutor::exceptionOutput = stdout;
 
 CppCheckExecutor::CppCheckExecutor()
-    : _settings(nullptr), time1(0), errorOutput(nullptr), errorlist(false)
+    : _settings(nullptr), latestProgressOutputTime(0), errorOutput(nullptr), errorlist(false)
 {
 }
 
@@ -828,7 +828,7 @@ int CppCheckExecutor::check_internal(CppCheck& cppcheck, int /*argc*/, const cha
     }
 
     if (settings.reportProgress)
-        time1 = std::time(nullptr);
+        latestProgressOutputTime = std::time(nullptr);
 
     if (!settings.outputFile.empty()) {
         errorOutput = new std::ofstream(settings.outputFile);
@@ -888,7 +888,8 @@ int CppCheckExecutor::check_internal(CppCheck& cppcheck, int /*argc*/, const cha
                 c++;
             }
         }
-        cppcheck.analyseWholeProgram();
+        if (cppcheck.analyseWholeProgram())
+            returnValue++;
     } else if (!ThreadExecutor::isEnabled()) {
         std::cout << "No thread support yet implemented for this platform." << std::endl;
     } else {
@@ -989,13 +990,13 @@ void CppCheckExecutor::reportProgress(const std::string &filename, const char st
 {
     (void)filename;
 
-    if (!time1)
+    if (!latestProgressOutputTime)
         return;
 
     // Report progress messages every 10 seconds
-    const std::time_t time2 = std::time(nullptr);
-    if (time2 >= (time1 + 10)) {
-        time1 = time2;
+    const std::time_t currentTime = std::time(nullptr);
+    if (currentTime >= (latestProgressOutputTime + 10)) {
+        latestProgressOutputTime = currentTime;
 
         // format a progress message
         std::ostringstream ostr;

@@ -62,6 +62,22 @@ void nullPointer(char *p, int fd)
     // not implemented yet: cppcheck-suppress nullPointer
     write(fd,NULL,42);
     write(fd,NULL,0);
+    // cppcheck-suppress leakReturnValNotUsed
+    // cppcheck-suppress nullPointer
+    open(NULL, 0);
+    // cppcheck-suppress leakReturnValNotUsed
+    // cppcheck-suppress nullPointer
+    open(NULL, 0, 0);
+    // cppcheck-suppress unreadVariable
+    // cppcheck-suppress nullPointer
+    int ret = access(NULL, 0);
+    // cppcheck-suppress ignoredReturnValue
+    // cppcheck-suppress leakReturnValNotUsed
+    // cppcheck-suppress nullPointer
+    fdopen(fd, NULL);
+    // cppcheck-suppress strtokCalled
+    // cppcheck-suppress nullPointer
+    strtok(p, NULL);
 }
 
 void memleak_getaddrinfo()
@@ -79,12 +95,12 @@ void memleak_mmap(int fd)
     // cppcheck-suppress memleak
 }
 
-/* TODO: add configuration for fdopen
-void resourceLeak_fdopen(int fd) {
+void resourceLeak_fdopen(int fd)
+{
+    // cppcheck-suppress unreadVariable
     FILE *f = fdopen(fd, "r");
     // cppcheck-suppress resourceLeak
 }
-*/
 
 void resourceLeak_fdopendir(int fd)
 {
@@ -107,6 +123,20 @@ void resourceLeak_socket(void)
     // cppcheck-suppress resourceLeak
 }
 
+void resourceLeak_open1(void)
+{
+    // cppcheck-suppress unreadVariable
+    int fd = open("file", O_RDWR | O_CREAT);
+    // cppcheck-suppress resourceLeak
+}
+
+void resourceLeak_open2(void)
+{
+    // cppcheck-suppress unreadVariable
+    int fd = open("file", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    // cppcheck-suppress resourceLeak
+}
+
 void noleak(int x, int y, int z)
 {
     DIR *p1 = fdopendir(x);
@@ -115,6 +145,10 @@ void noleak(int x, int y, int z)
     closedir(p2);
     int s = socket(AF_INET,SOCK_STREAM,0);
     close(s);
+    int fd1 = open("a", O_RDWR | O_CREAT);
+    close(fd1);
+    int fd2 = open("a", O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+    close(fd2);
     /* TODO: add configuration for open/fdopen
         // #2830
         int fd = open("path", O_RDONLY);
@@ -135,6 +169,8 @@ void ignoredReturnValue(void *addr, int fd)
     setuid(42);
     // cppcheck-suppress ignoredReturnValue
     getuid();
+    // cppcheck-suppress ignoredReturnValue
+    access("filename", 1);
 }
 
 
@@ -163,7 +199,7 @@ void uninitvar(int fd)
     void *p;
     // cppcheck-suppress uninitvar
     write(x,"ab",2);
-    // cppcheck-suppress uninitvar
+    // TODO cppcheck-suppress uninitvar
     write(fd,buf,2); // #6325
     // cppcheck-suppress uninitvar
     write(fd,"ab",x);
@@ -197,6 +233,20 @@ void uninitvar(int fd)
     // cppcheck-suppress uninitvar
     // cppcheck-suppress utimeCalled
     utime(filename, times1);
+
+    // cppcheck-suppress unreadVariable
+    // cppcheck-suppress uninitvar
+    int access_ret = access("file", x);
+
+    // cppcheck-suppress ignoredReturnValue
+    // cppcheck-suppress leakReturnValNotUsed
+    // cppcheck-suppress uninitvar
+    fdopen(x, "rw");
+
+    char *strtok_arg1;
+    // cppcheck-suppress strtokCalled
+    // cppcheck-suppress uninitvar
+    strtok(strtok_arg1, ";");
 }
 
 void uninitvar_getcwd(void)
@@ -232,10 +282,9 @@ void timet_h(struct timespec* ptp1)
     clock_settime(clk_id, ptp1);
 
     struct timespec tp;
-    // cppcheck-suppress uninitvar
+    // TODO cppcheck-suppress uninitvar
     clock_settime(CLOCK_REALTIME, &tp); // #6577 - false negative
     // cppcheck-suppress uninitvar
-    // cppcheck-suppress clock_settimeCalled
     clock_settime(clk_id, &tp);
 
     time_t clock = time(0);

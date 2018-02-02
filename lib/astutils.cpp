@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2018 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -152,7 +152,7 @@ bool isSameExpression(bool cpp, bool macro, const Token *tok1, const Token *tok2
         }
         return false;
     }
-    if (macro && (tok1->isExpandedMacro() || tok2->isExpandedMacro()))
+    if (macro && (tok1->isExpandedMacro() || tok2->isExpandedMacro() || tok1->isTemplateArg() || tok2->isTemplateArg()))
         return false;
     if (tok1->isComplex() != tok2->isComplex())
         return false;
@@ -398,20 +398,40 @@ bool isReturnScope(const Token * const endToken)
     return false;
 }
 
+bool isVariableChangedByFunctionCall(const Token *tok, unsigned int varid, const Settings *settings, bool *inconclusive)
+{
+    if (!tok)
+        return false;
+    if (tok->varId() == varid)
+        return isVariableChangedByFunctionCall(tok, settings, inconclusive);
+    return isVariableChangedByFunctionCall(tok->astOperand1(), varid, settings, inconclusive) ||
+           isVariableChangedByFunctionCall(tok->astOperand2(), varid, settings, inconclusive);
+}
+
 bool isVariableChangedByFunctionCall(const Token *tok, const Settings *settings, bool *inconclusive)
 {
     if (!tok)
         return false;
 
     // address of variable
-    const bool addressOf = tok && Token::simpleMatch(tok->previous(), "&");
+    const bool addressOf = Token::simpleMatch(tok->previous(), "&");
 
     // passing variable to subfunction?
     if (Token::Match(tok->tokAt(-2), ") & %name% [,)]") && Token::Match(tok->linkAt(-2)->previous(), "[,(] ("))
         ;
     else if (Token::Match(tok->tokAt(addressOf?-2:-1), "[(,] &| %name% [,)]"))
         ;
-    else
+    else if (Token::Match(tok->tokAt(addressOf?-2:-1), "[?:] &| %name% [:,)]")) {
+        const Token *parent = tok->astParent();
+        if (parent == tok->previous() && parent->str() == "&")
+            parent = parent->astParent();
+        while (Token::Match(parent, "[?:]"))
+            parent = parent->astParent();
+        while (Token::simpleMatch(parent, ","))
+            parent = parent->astParent();
+        if (!parent || parent->str() != "(")
+            return false;
+    } else
         return false;
 
     // reinterpret_cast etc..

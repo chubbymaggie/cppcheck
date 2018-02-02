@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -87,11 +87,15 @@ private:
         TEST_CASE(testassign1);  // Ticket #1819
         TEST_CASE(testassign2);  // Ticket #2765
 
+        TEST_CASE(assignAddressOfLocalArrayToGlobalPointer);
+        TEST_CASE(assignAddressOfLocalVariableToGlobalPointer);
+
         TEST_CASE(returnLocalVariable1);
         TEST_CASE(returnLocalVariable2);
         TEST_CASE(returnLocalVariable3); // &x[0]
         TEST_CASE(returnLocalVariable4); // x+y
         TEST_CASE(returnLocalVariable5); // cast
+        TEST_CASE(returnLocalVariable6); // valueflow
 
         // return reference..
         TEST_CASE(returnReference1);
@@ -623,6 +627,40 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
+    void assignAddressOfLocalArrayToGlobalPointer() {
+        check("int *p;\n"
+              "void f() {\n"
+              "  int x[10];\n"
+              "  p = x;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:4]: (warning) Address of local array x is assigned to global pointer p and not reassigned before x goes out of scope.\n", errout.str());
+
+        check("int *p;\n"
+              "void f() {\n"
+              "  int x[10];\n"
+              "  p = x;\n"
+              "  p = 0;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void assignAddressOfLocalVariableToGlobalPointer() {
+        check("int *p;\n"
+              "void f() {\n"
+              "  int x;\n"
+              "  p = &x;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:4]: (warning) Address of local variable x is assigned to global pointer p and not reassigned before x goes out of scope.\n", errout.str());
+
+        check("int *p;\n"
+              "void f() {\n"
+              "  int x;\n"
+              "  p = &x;\n"
+              "  p = 0;\n"
+              "}");
+        ASSERT_EQUALS("", errout.str());
+    }
+
     void returnLocalVariable1() {
         check("char *foo()\n"
               "{\n"
@@ -718,6 +756,14 @@ private:
         ASSERT_EQUALS("[test.cpp:3]: (error) Pointer to local array variable returned.\n", errout.str());
     }
 
+    void returnLocalVariable6() { // valueflow
+        check("int *foo() {\n"
+              "    int x = 123;\n"
+              "    int p = &x;\n"
+              "    return p;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:4]: (error) Address of auto-variable 'x' returned\n", errout.str());
+    }
 
     void returnReference1() {
         check("std::string &foo()\n"

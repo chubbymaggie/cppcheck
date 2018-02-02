@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2018 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -218,6 +218,13 @@ private:
         TEST_CASE(garbageCode185); // #6011
         TEST_CASE(garbageCode186); // #8151
         TEST_CASE(garbageCode187);
+        TEST_CASE(garbageCode188);
+        TEST_CASE(garbageCode189); // #8317
+        TEST_CASE(garbageCode190); // #8307
+        TEST_CASE(garbageCode191); // #8333
+
+        TEST_CASE(garbageCodeFuzzerClientMode1); // test cases created with the fuzzer client, mode 1
+
         TEST_CASE(garbageValueFlow);
         TEST_CASE(garbageSymbolDatabase);
         TEST_CASE(garbageAST);
@@ -291,7 +298,7 @@ private:
                             "void G( template <typename T> class (j) ) {}";
 
         // don't segfault..
-        checkCode(code);
+        ASSERT_THROW(checkCode(code), InternalError);
     }
 
     void wrong_syntax3() {   // #3544
@@ -372,6 +379,9 @@ private:
 
         //ticket #4267
         ASSERT_THROW(checkCode("f ( ) { switch break; { switch ( x ) { case } case break; -6: ( ) ; } }"), InternalError);
+
+        // Missing semicolon
+        ASSERT_THROW(checkCode("void foo () { switch(0) case 0 : default : }"), InternalError);
     }
 
     void garbageCode1() {
@@ -401,7 +411,7 @@ private:
 
     void garbageCode7() {
         checkCode("1 (int j) { return return (c) * sizeof } y[1];");
-        checkCode("foo(Args&&...) fn void = { } auto template<typename... bar(Args&&...)");
+        ASSERT_THROW(checkCode("foo(Args&&...) fn void = { } auto template<typename... bar(Args&&...)"), InternalError);
     }
 
     void garbageCode8() { // #5604
@@ -562,12 +572,12 @@ private:
     }
 
     void garbageCode36() { // #6334
-        checkCode("{ } < class template < > , { = } ; class... >\n"
-                  "struct Y { }\n"
-                  "class Types { }\n"
-                  "( X < int > \"uses template\" ) ( < ( ) \"uses ;"
-                  "( int int ::primary \"uses template\" ) int double \"uses )"
-                  "::primary , \"uses template\" ;\n");
+        ASSERT_THROW(checkCode("{ } < class template < > , { = } ; class... >\n"
+                               "struct Y { }\n"
+                               "class Types { }\n"
+                               "( X < int > \"uses template\" ) ( < ( ) \"uses ;"
+                               "( int int ::primary \"uses template\" ) int double \"uses )"
+                               "::primary , \"uses template\" ;\n"), InternalError);
     }
 
     void garbageCode37() {
@@ -601,7 +611,7 @@ private:
     }
 
     void garbageCode45() { // #6608
-        checkCode("struct true template < > { = } > struct Types \"s\" ; static_assert < int > ;");
+        ASSERT_THROW(checkCode("struct true template < > { = } > struct Types \"s\" ; static_assert < int > ;"), InternalError);
     }
 
     void garbageCode46() { // #6705
@@ -710,7 +720,7 @@ private:
     }
 
     void garbageCode77() { // #6755
-        checkCode("void foo (int **p) { { { };>= } } unsigned *d = (b b--) --*d");
+        ASSERT_THROW(checkCode("void foo (int **p) { { { };>= } } unsigned *d = (b b--) --*d"), InternalError);
     }
 
     void garbageCode78() { // #6756
@@ -823,7 +833,7 @@ private:
     }
 
     void garbageCode105() { // #6859
-        checkCode("void foo (int i) { int a , for (a 1; a( < 4; a++) if (a) (b b++) (b);) n++; }");
+        ASSERT_THROW(checkCode("void foo (int i) { int a , for (a 1; a( < 4; a++) if (a) (b b++) (b);) n++; }"), InternalError);
     }
 
     void garbageCode106() { // #6880
@@ -843,7 +853,7 @@ private:
     }
 
     void garbageCode110() { //  #6902 "segmentation fault (invalid code) in CheckStl::string_c_str"
-        checkCode("( *const<> ( size_t ) ; foo ) { } * ( *const ( size_t ) ( ) ;> foo )< { }");
+        ASSERT_THROW(checkCode("( *const<> ( size_t ) ; foo ) { } * ( *const ( size_t ) ( ) ;> foo )< { }"), InternalError);
     }
 
     void garbageCode111() { //  #6907
@@ -862,11 +872,11 @@ private:
     }
 
     void garbageCode115() { // #5506
-        checkCode("A template < int { int = -1 ; } template < int N > struct B { int [ A < N > :: zero ] ;  } ; B < 0 > b ;");
+        ASSERT_THROW(checkCode("A template < int { int = -1 ; } template < int N > struct B { int [ A < N > :: zero ] ;  } ; B < 0 > b ;"), InternalError);
     }
 
     void garbageCode116() { // #5356
-        checkCode("struct template<int { = }; > struct B { }; B < 0 > b;");
+        ASSERT_THROW(checkCode("struct template<int { = }; > struct B { }; B < 0 > b;"), InternalError);
     }
 
     void garbageCode117() { // #6121
@@ -1097,7 +1107,7 @@ private:
     }
 
     void garbageCode144() { // #6865
-        checkCode("template < typename > struct A { } ; template < typename > struct A < INVALID > : A < int[ > { }] ;");
+        ASSERT_THROW(checkCode("template < typename > struct A { } ; template < typename > struct A < INVALID > : A < int[ > { }] ;"), InternalError);
     }
 
     void garbageCode146() { // #7081
@@ -1194,13 +1204,21 @@ private:
     }
 
 
+    void garbageCodeFuzzerClientMode1() {
+        ASSERT_THROW(checkCode("void f() { x= name2 & name3 name2 = | 0.1 , | 0.1 , | 0.1 name4 <= >( ); }"), InternalError);
+        ASSERT_THROW(checkCode("void f() { x = , * [ | + 0xff | > 0xff]; }"), InternalError);
+        ASSERT_THROW(checkCode("void f() {  x = , | 0xff , 0.1 < ; }"), InternalError);
+        ASSERT_THROW(checkCode("void f() { x = [ 1 || ] ; }"), InternalError);
+        ASSERT_THROW(checkCode("void f1() { x = name6 1 || ? name3 [  ( 1 || +) ] ; }"), InternalError);
+    }
+
     void garbageValueFlow() {
         // #6089
         const char* code = "{} int foo(struct, x1, struct x2, x3, int, x5, x6, x7)\n"
                            "{\n"
                            "    (foo(s, , 2, , , 5, , 7)) abort()\n"
                            "}\n";
-        checkCode(code);
+        ASSERT_THROW(checkCode(code), InternalError);
 
         // #6106
         code = " f { int i ; b2 , [ ] ( for ( i = 0 ; ; ) ) }";
@@ -1430,6 +1448,31 @@ private:
     void garbageCode187() { // # 8152 - segfault in handling
         const std::string inp("0|\0|0>;\n", 8);
         ASSERT_THROW(checkCode(inp), InternalError);
+    }
+
+    void garbageCode188() { // #8255
+        ASSERT_THROW(checkCode("{z r(){(){for(;<(x);){if(0==0)}}}}"), InternalError);
+    }
+
+    void garbageCode189() { // #8317
+        checkCode("t&n(){()()[](){()}}$");
+    }
+
+    void garbageCode190() { // #8307
+        checkCode("void foo() {\n"
+                  "    int i;\n"
+                  "    i *= 0;\n"
+                  "    !i <;\n"
+                  "}");
+    }
+
+    void garbageCode191() { // #8333
+        ASSERT_THROW(checkCode("struct A { int f(const); };"), InternalError);
+        ASSERT_THROW(checkCode("struct A { int f(int, const, char); };"), InternalError);
+        ASSERT_THROW(checkCode("struct A { int f(struct); };"), InternalError);
+
+        // The following code is valid and should not trigger any error
+        checkCode("struct A { int f ( char ) ; } ;");
     }
 
     void syntaxErrorFirstToken() {

@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -432,11 +432,11 @@ const char *CheckMemoryLeak::functionArgAlloc(const Function *func, unsigned int
         return "";
 
     // Check if pointer is allocated.
-    int realloc = 0;
+    bool realloc = false;
     for (tok = func->functionScope->classStart; tok && tok != func->functionScope->classEnd; tok = tok->next()) {
         if (tok->varId() == arg->declarationId()) {
             if (Token::Match(tok->tokAt(-3), "free ( * %name% )")) {
-                realloc = 1;
+                realloc = true;
                 allocType = No;
             } else if (Token::Match(tok->previous(), "* %name% =")) {
                 allocType = getAllocationType(tok->tokAt(2), arg->declarationId());
@@ -490,17 +490,14 @@ static bool alwaysTrue(const Token *tok)
     if (!tok)
         return false;
     if (tok->values().size() == 1U &&
-        tok->values().front().intvalue != 0 &&
-        tok->values().front().isKnown())
+        tok->values().front().isKnown() &&
+        tok->values().front().intvalue != 0)
         return true;
     if (tok->str() == "||")
         return alwaysTrue(tok->astOperand1()) || alwaysTrue(tok->astOperand2());
     if (tok->str() == "true")
         return true;
-    return (tok->isComparisonOp() &&
-            tok->values().size() == 1U &&
-            tok->values().front().isKnown() &&
-            tok->values().front().intvalue != 0);
+    return false;
 }
 
 bool CheckMemoryLeakInFunction::test_white_list(const std::string &funcname, const Settings *settings, bool cpp)
@@ -1172,7 +1169,7 @@ Token *CheckMemoryLeakInFunction::getcode(const Token *tok, std::list<const Toke
                             ;
                         } else if (functions.empty() ||
                                    !test_white_list(functions.top()->str(), _settings, tokenizer->isCPP()) ||
-                                   getDeallocationType(functions.top(),varid)) {
+                                   getDeallocationType(functions.top(),varid) != AllocType::No) {
                             use = true;
                         }
                     }

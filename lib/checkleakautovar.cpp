@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -299,14 +299,16 @@ void CheckLeakAutoVar::checkScope(const Token * const startToken,
             if (varTok->next()->astOperand2() && Token::Match(varTok->next()->astOperand2()->previous(), "%type% (")) {
                 const Library::AllocFunc* f = _settings->library.alloc(varTok->next()->astOperand2()->previous());
                 if (f && f->arg == -1) {
-                    alloctype[varTok->varId()].type = f->groupId;
-                    alloctype[varTok->varId()].status = VarInfo::ALLOC;
+                    VarInfo::AllocInfo& varAlloc = alloctype[varTok->varId()];
+                    varAlloc.type = f->groupId;
+                    varAlloc.status = VarInfo::ALLOC;
                 }
             } else if (_tokenizer->isCPP() && Token::Match(varTok->tokAt(2), "new !!(")) {
                 const Token* tok2 = varTok->tokAt(2)->astOperand1();
                 bool arrayNew = (tok2 && (tok2->str() == "[" || (tok2->str() == "(" && tok2->astOperand1() && tok2->astOperand1()->str() == "[")));
-                alloctype[varTok->varId()].type = arrayNew ? -2 : -1;
-                alloctype[varTok->varId()].status = VarInfo::ALLOC;
+                VarInfo::AllocInfo& varAlloc = alloctype[varTok->varId()];
+                varAlloc.type = arrayNew ? -2 : -1;
+                varAlloc.status = VarInfo::ALLOC;
             }
 
             // Assigning non-zero value variable. It might be used to
@@ -323,6 +325,24 @@ void CheckLeakAutoVar::checkScope(const Token * const startToken,
         else if (Token::simpleMatch(tok, "if (")) {
             // Parse function calls inside the condition
             for (const Token *innerTok = tok->tokAt(2); innerTok; innerTok = innerTok->next()) {
+                if (Token::Match(innerTok, "%var% =")) {
+                    // allocation?
+                    if (Token::Match(innerTok->tokAt(2), "%type% (")) {
+                        const Library::AllocFunc* f = _settings->library.alloc(innerTok->tokAt(2));
+                        if (f && f->arg == -1) {
+                            VarInfo::AllocInfo& varAlloc = alloctype[innerTok->varId()];
+                            varAlloc.type = f->groupId;
+                            varAlloc.status = VarInfo::ALLOC;
+                        }
+                    } else if (_tokenizer->isCPP() && Token::Match(innerTok->tokAt(2), "new !!(")) {
+                        const Token* tok2 = innerTok->tokAt(2)->astOperand1();
+                        bool arrayNew = (tok2 && (tok2->str() == "[" || (tok2->str() == "(" && tok2->astOperand1() && tok2->astOperand1()->str() == "[")));
+                        VarInfo::AllocInfo& varAlloc = alloctype[innerTok->varId()];
+                        varAlloc.type = arrayNew ? -2 : -1;
+                        varAlloc.status = VarInfo::ALLOC;
+                    }
+                }
+
                 if (innerTok->str() == ")")
                     break;
                 if (innerTok->str() == "(" && innerTok->previous()->isName()) {

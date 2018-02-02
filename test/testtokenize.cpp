@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2018 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -73,8 +73,11 @@ private:
         TEST_CASE(tokenize32);  // #5884 (fsanitize=undefined: left shift of negative value -10000 in lib/templatesimplifier.cpp:852:46)
         TEST_CASE(tokenize33);  // #5780 Various crashes on valid template code
         TEST_CASE(tokenize34);  // #8031
+        TEST_CASE(tokenize35);  // #8361
 
         TEST_CASE(validate);
+
+        TEST_CASE(objectiveC); // Syntax error should be written for objective C/C++ code.
 
         TEST_CASE(syntax_case_default);
 
@@ -491,7 +494,7 @@ private:
         std::istringstream istr2(debugwarnings.c_str());
         std::string line;
         while (std::getline(istr2,line)) {
-            if (line.find("ValueFlow") == std::string::npos)
+            if (line.find("valueflow.cpp") == std::string::npos)
                 errout << line << "\n";
         }
 
@@ -521,7 +524,7 @@ private:
         std::istringstream istr2(debugwarnings.c_str());
         std::string line;
         while (std::getline(istr2,line)) {
-            if (line.find("ValueFlow") == std::string::npos)
+            if (line.find("valueflow.cpp") == std::string::npos)
                 errout << line << "\n";
         }
 
@@ -757,7 +760,7 @@ private:
 
     // #4245 - segfault
     void tokenize26() {
-        tokenizeAndStringify("class x { protected : template < int y = } ;");
+        ASSERT_THROW(tokenizeAndStringify("class x { protected : template < int y = } ;"), InternalError); // Garbage code
     }
 
     void tokenize27() {
@@ -830,13 +833,18 @@ private:
                                 "template <class T> Containter<T>::Containter() : mElements(nullptr) {}\n"
                                 "Containter<int> intContainer;";
             const char exp [] = "5: template < class T > Containter < T > :: Containter ( ) : mElements ( nullptr ) { }\n"
-                                "6: Containter < int > intContainer@1 ; struct Containter < int > {\n"
-                                "2: Containter < int > ( ) ;\n"
+                                "6: Containter<int> intContainer@1 ; struct Containter<int> {\n"
+                                "2: Containter<int> ( ) ;\n"
                                 "3: int * mElements@2 ;\n"
                                 "4: } ;\n"
-                                "5: Containter < int > :: Containter ( ) : mElements@2 ( nullptr ) { }\n";
+                                "5: Containter<int> :: Containter ( ) : mElements@2 ( nullptr ) { }\n";
             ASSERT_EQUALS(exp, tokenizeDebugListing(code, /*simplify=*/true));
         }
+    }
+
+    void tokenize35() { // #8361
+        tokenizeAndStringify("typedef int CRCWord; "
+                             "template<typename T> ::CRCWord const Compute(T const t) { return 0; }");
     }
 
     void validate() {
@@ -846,6 +854,10 @@ private:
         ASSERT_THROW(tokenizeAndStringify(";template<class T> class X { };",false,false,Settings::Native,"test.c"), InternalError);
         ASSERT_THROW(tokenizeAndStringify("int X<Y>() {};",false,false,Settings::Native,"test.c"), InternalError);
         ASSERT_THROW(tokenizeAndStringify("void foo(int i) { reinterpret_cast<char>(i) };",false,false,Settings::Native,"test.h"), InternalError);
+    }
+
+    void objectiveC() {
+        ASSERT_THROW(tokenizeAndStringify("void f() { [foo bar]; }"), InternalError);
     }
 
     void syntax_case_default() { // correct syntax
@@ -889,7 +901,7 @@ private:
     void foreach () {
         // #3690,#5154
         const char code[] ="void f() { for each ( char c in MyString ) { Console::Write(c); } }";
-        ASSERT_EQUALS("void f ( ) { asm ( \"char c in MyString\" ) { Console :: Write ( c ) ; } }" ,tokenizeAndStringify(code));
+        ASSERT_EQUALS("void f ( ) { asm ( \"char c in MyString\" ) { Console :: Write ( c ) ; } }", tokenizeAndStringify(code));
     }
 
     void combineOperators() {
@@ -3938,7 +3950,7 @@ private:
     }
 
     void vardecl23() {  // #4276 - segmentation fault
-        tokenizeAndStringify("class a { protected : template < class int x = 1 ; public : int f ( ) ; }");
+        ASSERT_THROW(tokenizeAndStringify("class a { protected : template < class int x = 1 ; public : int f ( ) ; }"), InternalError);
     }
 
     void vardecl24() {  // #4187 - variable declaration within lambda function
@@ -4523,6 +4535,40 @@ private:
         }
 
         {
+            // if (a < ... > d) { }
+            const char code[] = "if (a < b || c == 3 || d > e);";
+            errout.str("");
+            Tokenizer tokenizer(&settings0, this);
+            std::istringstream istr(code);
+            tokenizer.tokenize(istr, "test.cpp");
+            const Token *tok = tokenizer.tokens();
+
+            ASSERT_EQUALS(true, tok->linkAt(3) == nullptr);
+        }
+
+        {
+            // template
+            const char code[] = "a<b==3 || c> d;";
+            errout.str("");
+            Tokenizer tokenizer(&settings0, this);
+            std::istringstream istr(code);
+            tokenizer.tokenize(istr, "test.cpp");
+            const Token *tok = tokenizer.tokens();
+            ASSERT_EQUALS(true, tok->linkAt(1) == tok->tokAt(7));
+        }
+
+        {
+            // template
+            const char code[] = "a<b || c==4> d;";
+            errout.str("");
+            Tokenizer tokenizer(&settings0, this);
+            std::istringstream istr(code);
+            tokenizer.tokenize(istr, "test.cpp");
+            const Token *tok = tokenizer.tokens();
+            ASSERT_EQUALS(true, tok->linkAt(1) == tok->tokAt(7));
+        }
+
+        {
             const char code[] = "template < f = b || c > struct S;";
             errout.str("");
             Tokenizer tokenizer(&settings0, this);
@@ -4704,12 +4750,19 @@ private:
         //ticket #3227
         ASSERT_EQUALS("void foo ( ) { switch ( n ) { label : ; case 1 : ; label1 : ; label2 : ; break ; } }",
                       tokenizeAndStringify("void foo(){ switch (n){ label: case 1: label1: label2: break; }}"));
+        //ticket #8345
+        ASSERT_EQUALS("void foo ( ) { switch ( 0 ) { case 0 : ; default : ; } }",
+                      tokenizeAndStringify("void foo () { switch(0) case 0 : default : ; }"));
     }
 
     void simplifyPointerToStandardType() {
         // Pointer to standard type
         ASSERT_EQUALS("char buf [ 100 ] ; readlink ( path , buf , 99 ) ;",
                       tokenizeAndStringify("char buf[100] ; readlink(path, &buf[0], 99);",
+                                           false, true, Settings::Native, "test.c"));
+
+        ASSERT_EQUALS("void foo ( char * c ) { if ( 1 == ( 1 & c [ 0 ] ) ) { } }",
+                      tokenizeAndStringify("void foo(char *c) { if (1==(1 & c[0])) {} }",
                                            false, true, Settings::Native, "test.c"));
 
         // Simplification of unknown type - C only
@@ -4927,7 +4980,7 @@ private:
                            "{\n"
                            "  fn2<int>();\n"
                            "}\n";
-        ASSERT_EQUALS("int main ( )\n{\nfn2 < int > ( ) ;\n} void fn2 < int > ( int t = [ ] { return 1 ; } ( ) )\n{ }", tokenizeAndStringify(code));
+        ASSERT_EQUALS("int main ( )\n{\nfn2<int> ( ) ;\n} void fn2<int> ( int t = [ ] { return 1 ; } ( ) )\n{ }", tokenizeAndStringify(code));
     }
 
     void cpp0xtemplate2() {
@@ -5778,9 +5831,20 @@ private:
     void simplifySQL() {
         // Oracle PRO*C extensions for inline SQL. Just replace the SQL with "asm()" to fix wrong error messages
         // ticket: #1959
-        ASSERT_EQUALS("asm ( \"\"EXEC SQL SELECT A FROM B\"\" ) ;", tokenizeAndStringify("EXEC SQL SELECT A FROM B;",false));
-        ASSERT_EQUALS("asm ( \"\"EXEC SQL\"\" ) ;", tokenizeAndStringify("EXEC SQL",false));
+        ASSERT_EQUALS("asm ( \"\"__CPPCHECK_EMBEDDED_SQL_EXEC__ SQL SELECT A FROM B\"\" ) ;", tokenizeAndStringify("__CPPCHECK_EMBEDDED_SQL_EXEC__ SQL SELECT A FROM B;",false));
+        ASSERT_THROW(tokenizeAndStringify("__CPPCHECK_EMBEDDED_SQL_EXEC__ SQL",false), InternalError);
 
+        ASSERT_EQUALS("asm ( \"\"__CPPCHECK_EMBEDDED_SQL_EXEC__ SQL EXECUTE BEGIN Proc1 ( A ) ; END ; END - __CPPCHECK_EMBEDDED_SQL_EXEC__\"\" ) ; asm ( \"\"__CPPCHECK_EMBEDDED_SQL_EXEC__ SQL COMMIT\"\" ) ;",
+                      tokenizeAndStringify("__CPPCHECK_EMBEDDED_SQL_EXEC__ SQL EXECUTE BEGIN Proc1(A); END; END-__CPPCHECK_EMBEDDED_SQL_EXEC__; __CPPCHECK_EMBEDDED_SQL_EXEC__ SQL COMMIT;",false));
+        ASSERT_EQUALS("asm ( \"\"__CPPCHECK_EMBEDDED_SQL_EXEC__ SQL UPDATE A SET B = C\"\" ) ; asm ( \"\"__CPPCHECK_EMBEDDED_SQL_EXEC__ SQL COMMIT\"\" ) ;",
+                      tokenizeAndStringify("__CPPCHECK_EMBEDDED_SQL_EXEC__ SQL UPDATE A SET B = C; __CPPCHECK_EMBEDDED_SQL_EXEC__ SQL COMMIT;",false));
+        ASSERT_EQUALS("asm ( \"\"__CPPCHECK_EMBEDDED_SQL_EXEC__ SQL COMMIT\"\" ) ; asm ( \"\"__CPPCHECK_EMBEDDED_SQL_EXEC__ SQL EXECUTE BEGIN Proc1 ( A ) ; END ; END - __CPPCHECK_EMBEDDED_SQL_EXEC__\"\" ) ;",
+                      tokenizeAndStringify("__CPPCHECK_EMBEDDED_SQL_EXEC__ SQL COMMIT; __CPPCHECK_EMBEDDED_SQL_EXEC__ SQL EXECUTE BEGIN Proc1(A); END; END-__CPPCHECK_EMBEDDED_SQL_EXEC__;",false));
+
+        ASSERT_THROW(tokenizeAndStringify("int f(){ __CPPCHECK_EMBEDDED_SQL_EXEC__ SQL } int a;",false), InternalError);
+        ASSERT_THROW(tokenizeAndStringify("__CPPCHECK_EMBEDDED_SQL_EXEC__ SQL int f(){",false), InternalError);
+        ASSERT_THROW(tokenizeAndStringify("__CPPCHECK_EMBEDDED_SQL_EXEC__ SQL END-__CPPCHECK_EMBEDDED_SQL_EXEC__ int a;",false), InternalError);
+        ASSERT_NO_THROW(tokenizeAndStringify("__CPPCHECK_EMBEDDED_SQL_EXEC__ SQL UPDATE A SET B = :&b->b1, C = :c::c1;",false));
     }
 
     void simplifyCAlternativeTokens() {

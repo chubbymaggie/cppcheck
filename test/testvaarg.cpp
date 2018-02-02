@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -183,6 +183,13 @@ private:
               "    return va_arg(arg_ptr, float);\n"
               "}");
         ASSERT_EQUALS("[test.cpp:5]: (error) va_list 'arg_ptr' used before va_start() was called.\n", errout.str());
+
+        check("void Format(char* szFormat, char (*szBuffer)[_Size], ...) {\n"
+              "    va_list arg_ptr;\n"
+              "    va_end(arg_ptr);\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:3]: (error) va_list 'arg_ptr' used before va_start() was called.\n", errout.str());
+
 
         check("void Format(char* szFormat, char (*szBuffer)[_Size], ...) {\n"
               "    va_list arg_ptr;\n"

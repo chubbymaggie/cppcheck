@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2018 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -61,7 +61,7 @@ void CheckStl::iteratorsError(const Token *tok, const std::string &container1, c
 }
 
 // Error message used when dereferencing an iterator that has been erased..
-void CheckStl::dereferenceErasedError(const Token *erased, const Token* deref, const std::string &itername)
+void CheckStl::dereferenceErasedError(const Token *erased, const Token* deref, const std::string &itername, bool inconclusive)
 {
     if (erased) {
         std::list<const Token*> callstack;
@@ -70,12 +70,12 @@ void CheckStl::dereferenceErasedError(const Token *erased, const Token* deref, c
         reportError(callstack, Severity::error, "eraseDereference",
                     "Iterator '" + itername + "' used after element has been erased.\n"
                     "The iterator '" + itername + "' is invalid after the element it pointed to has been erased. "
-                    "Dereferencing or comparing it with another iterator is invalid operation.", CWE664, false);
+                    "Dereferencing or comparing it with another iterator is invalid operation.", CWE664, inconclusive);
     } else {
         reportError(deref, Severity::error, "eraseDereference",
                     "Invalid iterator '" + itername + "' used.\n"
                     "The iterator '" + itername + "' is invalid before being assigned. "
-                    "Dereferencing or comparing it with another iterator is invalid operation.", CWE664, false);
+                    "Dereferencing or comparing it with another iterator is invalid operation.", CWE664, inconclusive);
     }
 }
 
@@ -86,12 +86,13 @@ static const Token *skipMembers(const Token *tok)
     return tok;
 }
 
-static bool isIterator(const Variable *var)
+static bool isIterator(const Variable *var, bool& inconclusiveType)
 {
     // Check that its an iterator
     if (!var || !var->isLocal() || !Token::Match(var->typeEndToken(), "iterator|const_iterator|reverse_iterator|const_reverse_iterator|auto"))
         return false;
 
+    inconclusiveType = false;
     if (var->typeEndToken()->str() == "auto")
         return (var->nameToken()->valueType() && var->nameToken()->valueType()->type == ValueType::Type::ITERATOR);
 
@@ -99,11 +100,27 @@ static bool isIterator(const Variable *var)
         // look for operator* and operator++
         const Function* end = var->type()->getFunction("operator*");
         const Function* incOperator = var->type()->getFunction("operator++");
-        if (!end || end->argCount() > 0 || !incOperator)
+        if (!end || end->argCount() > 0 || !incOperator) {
             return false;
+        } else {
+            inconclusiveType = true; // heuristics only
+        }
     }
 
     return true;
+}
+
+static std::string getContainerName(const Token *containerToken)
+{
+    if (!containerToken)
+        return std::string();
+    std::string ret(containerToken->str());
+    for (const Token *nametok = containerToken; nametok; nametok = nametok->tokAt(-2)) {
+        if (!Token::Match(nametok->tokAt(-2), "%name% ."))
+            break;
+        ret = nametok->strAt(-2) + '.' + ret;
+    }
+    return ret;
 }
 
 void CheckStl::iterators()
@@ -113,7 +130,8 @@ void CheckStl::iterators()
     for (unsigned int iteratorId = 1; iteratorId < symbolDatabase->getVariableListSize(); iteratorId++) {
         const Variable* var = symbolDatabase->getVariableFromVarId(iteratorId);
 
-        if (!isIterator(var))
+        bool inconclusiveType=false;
+        if (!isIterator(var, inconclusiveType))
             continue;
 
         // the validIterator flag says if the iterator has a valid value or not
@@ -121,7 +139,7 @@ void CheckStl::iterators()
         const Scope* invalidationScope = nullptr;
 
         // The container this iterator can be used with
-        const Variable* container = nullptr;
+        const Token* containerToken = nullptr;
         const Scope* containerAssignScope = nullptr;
 
         // When "validatingToken" is reached the validIterator is set to true
@@ -135,7 +153,7 @@ void CheckStl::iterators()
             if (invalidationScope && tok2 == invalidationScope->classEnd)
                 validIterator = true; // Assume that the iterator becomes valid again
             if (containerAssignScope && tok2 == containerAssignScope->classEnd)
-                container = nullptr; // We don't know which containers might be used with the iterator
+                containerToken = nullptr; // We don't know which containers might be used with the iterator
 
             if (tok2 == validatingToken) {
                 validIterator = true;
@@ -144,14 +162,14 @@ void CheckStl::iterators()
             }
 
             // Is iterator compared against different container?
-            if (tok2->isComparisonOp() && container && tok2->astOperand1() && tok2->astOperand2()) {
+            if (tok2->isComparisonOp() && containerToken && tok2->astOperand1() && tok2->astOperand2()) {
                 const Token *other = nullptr;
                 if (tok2->astOperand1()->varId() == iteratorId)
                     other = tok2->astOperand2()->tokAt(-3);
                 else if (tok2->astOperand2()->varId() == iteratorId)
                     other = tok2->astOperand1()->tokAt(-3);
-                if (Token::Match(other, "%name% . end|rend|cend|crend ( )") && other->varId() != container->declarationId())
-                    iteratorsError(tok2, container->name(), other->str());
+                if (Token::Match(other, "%name% . end|rend|cend|crend ( )") && other->varId() != containerToken->varId())
+                    iteratorsError(tok2, getContainerName(containerToken), getContainerName(other));
             }
 
             // Is the iterator used in a insert/erase operation?
@@ -169,7 +187,7 @@ void CheckStl::iterators()
 
                 // If insert/erase is used on different container then
                 // report an error
-                if (container && tok2->varId() != container->declarationId()) {
+                if (containerToken && tok2->varId() != containerToken->varId()) {
                     // skip error message if container is a set..
                     const Variable *variableInfo = tok2->variable();
                     const Token *decltok = variableInfo ? variableInfo->typeStartToken() : nullptr;
@@ -187,9 +205,10 @@ void CheckStl::iterators()
                         if (!par2 || par2->nextArgument())
                             continue;
                         while (par2->str() != ")") {
-                            if (par2->varId() == container->declarationId())
+                            if (par2->varId() == containerToken->varId())
                                 break;
-                            if (isIterator(par2->variable()))
+                            bool inconclusiveType2=false;
+                            if (isIterator(par2->variable(), inconclusiveType2))
                                 break;  // TODO: check if iterator points at same container
                             if (par2->str() == "(")
                                 par2 = par2->link();
@@ -200,11 +219,11 @@ void CheckStl::iterators()
                     }
 
                     // Show error message, mismatching iterator is used.
-                    iteratorsError(tok2, container->name(), tok2->str());
+                    iteratorsError(tok2, getContainerName(containerToken), getContainerName(tok2));
                 }
 
                 // invalidate the iterator if it is erased
-                else if (tok2->strAt(2) == "erase" && (tok2->strAt(4) != "*" || (container && tok2->varId() == container->declarationId()))) {
+                else if (tok2->strAt(2) == "erase" && (tok2->strAt(4) != "*" || (containerToken && tok2->varId() == containerToken->varId()))) {
                     validIterator = false;
                     eraseToken = tok2;
                     invalidationScope = tok2->scope();
@@ -219,18 +238,21 @@ void CheckStl::iterators()
             else if (Token::Match(tok2, "%varid% = %name% .", iteratorId) &&
                      Token::simpleMatch(skipMembers(tok2->tokAt(2)), "erase (")) {
                 // the returned iterator is valid
-                validatingToken = tok2->linkAt(5);
-                tok2 = tok2->tokAt(5);
+                validatingToken = skipMembers(tok2->tokAt(2))->linkAt(1);
+                tok2 = validatingToken->link();
             }
 
             // Reassign the iterator
-            else if (Token::Match(tok2, "%varid% = %name% . begin|rbegin|cbegin|crbegin|find (", iteratorId)) {
-                validatingToken = tok2->linkAt(5);
-                container = tok2->tokAt(2)->variable();
+            else if (Token::Match(tok2, "%varid% = %name% .", iteratorId) &&
+                     Token::Match(skipMembers(tok2->tokAt(2)), "begin|rbegin|cbegin|crbegin|find (")) {
+                validatingToken = skipMembers(tok2->tokAt(2))->linkAt(1);
+                containerToken = skipMembers(tok2->tokAt(2))->tokAt(-2);
+                if (containerToken->varId() == 0 || Token::simpleMatch(validatingToken, ") ."))
+                    containerToken = nullptr;
                 containerAssignScope = tok2->scope();
 
                 // skip ahead
-                tok2 = tok2->tokAt(5);
+                tok2 = validatingToken->link();
             }
 
             // Reassign the iterator
@@ -250,10 +272,10 @@ void CheckStl::iterators()
 
             // Dereferencing invalid iterator?
             else if (!validIterator && Token::Match(tok2, "* %varid%", iteratorId)) {
-                dereferenceErasedError(eraseToken, tok2, tok2->strAt(1));
+                dereferenceErasedError(eraseToken, tok2, tok2->strAt(1), inconclusiveType);
                 tok2 = tok2->next();
             } else if (!validIterator && Token::Match(tok2, "%varid% . %name%", iteratorId)) {
-                dereferenceErasedError(eraseToken, tok2, tok2->str());
+                dereferenceErasedError(eraseToken, tok2, tok2->str(), inconclusiveType);
                 tok2 = tok2->tokAt(2);
             }
 
@@ -265,7 +287,7 @@ void CheckStl::iterators()
 
             // bailout handling. Assume that the iterator becomes valid if we see else.
             // TODO: better handling
-            else if (tok2 && tok2->str() == "else") {
+            else if (tok2->str() == "else") {
                 validIterator = true;
             }
         }
@@ -498,7 +520,8 @@ void CheckStl::erase()
 
 void CheckStl::eraseCheckLoopVar(const Scope &scope, const Variable *var)
 {
-    if (!var || !Token::simpleMatch(var->typeEndToken(), "iterator"))
+    bool inconclusiveType=false;
+    if (!isIterator(var, inconclusiveType))
         return;
     for (const Token *tok = scope.classStart; tok != scope.classEnd; tok = tok->next()) {
         if (tok->str() != "(")
@@ -525,14 +548,14 @@ void CheckStl::eraseCheckLoopVar(const Scope &scope, const Variable *var)
             if (tok2->varId() == var->declarationId()) {
                 if (Token::simpleMatch(tok2->next(), "="))
                     break;
-                dereferenceErasedError(tok, tok2, tok2->str());
+                dereferenceErasedError(tok, tok2, tok2->str(), inconclusiveType);
                 break;
             }
             if (indentlevel == 0U && Token::Match(tok2, "break|return|goto"))
                 break;
         }
         if (tok2 == scope.classEnd)
-            dereferenceErasedError(tok, scope.classDef, var->nameToken()->str());
+            dereferenceErasedError(tok, scope.classDef, var->nameToken()->str(), inconclusiveType);
     }
 }
 
@@ -1598,12 +1621,12 @@ void CheckStl::readingEmptyStlContainer()
 
             // function call
             if (Token::Match(tok, "!!. %name% (") && !Token::simpleMatch(tok->linkAt(2), ") {")) {
-                for (std::map<unsigned int, const Library::Container*>::const_iterator it = emptyContainer.begin(); it != emptyContainer.end();) {
+                for (std::map<unsigned int, const Library::Container*>::iterator it = emptyContainer.begin(); it != emptyContainer.end();) {
                     const Variable *var = _tokenizer->getSymbolDatabase()->getVariableFromVarId(it->first);
                     if (var && (var->isLocal() || var->isArgument()))
                         ++it;
                     else
-                        it = emptyContainer.erase(it);
+                        emptyContainer.erase(it++);
                 }
             }
 

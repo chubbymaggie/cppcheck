@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -222,9 +222,28 @@ void ImportProject::importCompileCommands(std::istream &istr)
                             fval += command[pos];
                         pos++;
                     }
-                    if (F=='D')
-                        fs.defines += fval + ";";
-                    else if (F=='U')
+                    if (F=='D') {
+                        std::string defval;
+                        bool escape = false;
+                        while (pos < command.size() && command[pos] != ' ') {
+                            if (command[pos] != '\\') {
+                                defval += command[pos];
+                                escape = false;
+                            } else {
+                                if (escape) {
+                                    defval += '\\';
+                                    escape = false;
+                                } else {
+                                    escape = true;
+                                }
+                            }
+                            pos++;
+                        }
+                        fs.defines += fval;
+                        if (!defval.empty())
+                            fs.defines += defval;
+                        fs.defines += ';';
+                    } else if (F=='U')
                         fs.undefs.insert(fval);
                     else if (F=='I')
                         fs.includePaths.push_back(fval);
@@ -413,8 +432,14 @@ static void importPropertyGroup(const tinyxml2::XMLElement *node, std::map<std::
 static void loadVisualStudioProperties(const std::string &props, std::map<std::string,std::string,cppcheck::stricmp> *variables, std::string *includePath, const std::string &additionalIncludeDirectories, std::list<ItemDefinitionGroup> &itemDefinitionGroupList)
 {
     std::string filename(props);
+    // variables cant be resolved
     if (!simplifyPathWithVariables(filename, *variables))
         return;
+
+    // prepend project dir (if it exists) to transform relative paths into absolute ones
+    if (!Path::isAbsolute(filename) && variables->count("ProjectDir") > 0)
+        filename = Path::getAbsoluteFilePath(variables->at("ProjectDir") + filename);
+
     tinyxml2::XMLDocument doc;
     if (doc.LoadFile(filename.c_str()) != tinyxml2::XML_SUCCESS)
         return;

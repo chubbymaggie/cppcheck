@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -86,34 +86,48 @@ void LibraryDialog::openCfg()
                                  filter,
                                  &selectedFilter);
 
-    if (!selectedFile.isEmpty()) {
-        QFile file(selectedFile);
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            ignoreChanges = true;
-            data.open(file);
-            mFileName = selectedFile;
-            ui->buttonSave->setEnabled(false);
-            ui->buttonSaveAs->setEnabled(true);
-            ui->filter->clear();
-            ui->functions->clear();
-            for (CppcheckLibraryData::Function &function : data.functions) {
-                ui->functions->addItem(new FunctionListItem(ui->functions,
-                                       &function,
-                                       false));
-            }
-            ui->sortFunctions->setEnabled(!data.functions.empty());
-            ui->filter->setEnabled(!data.functions.empty());
-            ui->addFunction->setEnabled(true);
-            ignoreChanges = false;
-        } else {
-            QMessageBox msg(QMessageBox::Critical,
-                            tr("Cppcheck"),
-                            tr("Can not open file %1.").arg(selectedFile),
-                            QMessageBox::Ok,
-                            this);
-            msg.exec();
-        }
+    if (selectedFile.isEmpty())
+        return;
+
+    QFile file(selectedFile);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        QMessageBox msg(QMessageBox::Critical,
+                        tr("Cppcheck"),
+                        tr("Can not open file %1.").arg(selectedFile),
+                        QMessageBox::Ok,
+                        this);
+        msg.exec();
+        return;
     }
+
+    CppcheckLibraryData tempdata;
+    const QString errmsg = tempdata.open(file);
+    if (!errmsg.isNull()) {
+        QMessageBox msg(QMessageBox::Critical,
+                        tr("Cppcheck"),
+                        tr("Failed to load %1. %2.").arg(selectedFile).arg(errmsg),
+                        QMessageBox::Ok,
+                        this);
+        msg.exec();
+        return;
+    }
+
+    ignoreChanges = true;
+    data.swap(tempdata);
+    mFileName = selectedFile;
+    ui->buttonSave->setEnabled(false);
+    ui->buttonSaveAs->setEnabled(true);
+    ui->filter->clear();
+    ui->functions->clear();
+    for (CppcheckLibraryData::Function &function : data.functions) {
+        ui->functions->addItem(new FunctionListItem(ui->functions,
+                               &function,
+                               false));
+    }
+    ui->sortFunctions->setEnabled(!data.functions.empty());
+    ui->filter->setEnabled(!data.functions.empty());
+    ui->addFunction->setEnabled(true);
+    ignoreChanges = false;
 }
 
 void LibraryDialog::saveCfg()

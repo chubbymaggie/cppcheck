@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -49,6 +49,13 @@
 static const QString OnlineHelpURL("http://cppcheck.net/manual.html");
 static const QString compile_commands_json("compile_commands.json");
 
+static QString getDataDir(const QSettings *settings)
+{
+    const QString dataDir = settings->value("DATADIR", QString()).toString();
+    const QString appPath = QFileInfo(QCoreApplication::applicationFilePath()).canonicalPath();
+    return dataDir.isEmpty() ? appPath : dataDir;
+}
+
 MainWindow::MainWindow(TranslationHandler* th, QSettings* settings) :
     mSettings(settings),
     mApplications(new ApplicationList(this)),
@@ -64,7 +71,7 @@ MainWindow::MainWindow(TranslationHandler* th, QSettings* settings) :
 {
     mUI.setupUi(this);
     mThread = new ThreadHandler(this);
-    mThread->setDataDir(mSettings->value("DATADIR", QString()).toString());
+    mThread->setDataDir(getDataDir(settings));
     mUI.mResults->initialize(mSettings, mApplications, mThread);
 
     // Filter timer to delay filtering results slightly while typing
@@ -449,19 +456,9 @@ void MainWindow::doAnalyzeProject(ImportProject p)
 
     //mThread->SetanalyzeProject(true);
     if (mProjectFile) {
-        mThread->setAddonsAndTools(mProjectFile->getAddonsAndTools());
-        mThread->setPythonPath(mSettings->value(SETTINGS_PYTHON_PATH).toString());
+        mThread->setAddonsAndTools(mProjectFile->getAddonsAndTools(), mSettings->value(SETTINGS_MISRA_FILE).toString());
         QString clangHeaders = mSettings->value(SETTINGS_VS_INCLUDE_PATHS).toString();
         mThread->setClangIncludePaths(clangHeaders.split(";"));
-        QString clangPath = mSettings->value(SETTINGS_CLANG_PATH,QString()).toString();
-#ifdef Q_OS_WIN
-        if (clangPath.isEmpty()) {
-            // Try to autodetect clang
-            if (QFileInfo("C:/Program Files/LLVM/bin/clang.exe").exists())
-                clangPath = "C:/Program Files/LLVM/bin";
-        }
-#endif
-        mThread->setClangPath(clangPath);
         mThread->setSuppressions(mProjectFile->getSuppressions());
     }
     mThread->setProject(p);
@@ -501,6 +498,8 @@ void MainWindow::doAnalyzeFiles(const QStringList &files)
     mUI.mResults->checkingStarted(fileNames.count());
 
     mThread->setFiles(fileNames);
+    if (mProjectFile)
+        mThread->setAddonsAndTools(mProjectFile->getAddonsAndTools(), mSettings->value(SETTINGS_MISRA_FILE).toString());
     QDir inf(mCurrentDirectory);
     const QString checkPath = inf.canonicalPath();
     setPath(SETTINGS_LAST_CHECK_PATH, checkPath);
@@ -840,8 +839,12 @@ Settings MainWindow::getCppcheckSettings()
 
         const QString &buildDir = mProjectFile->getBuildDir();
         if (!buildDir.isEmpty()) {
-            QString prjpath = QFileInfo(mProjectFile->getFilename()).absolutePath();
-            result.buildDir = (prjpath + '/' + buildDir).toStdString();
+            if (QDir(buildDir).isAbsolute()) {
+                result.buildDir = buildDir.toStdString();
+            } else {
+                QString prjpath = QFileInfo(mProjectFile->getFilename()).absolutePath();
+                result.buildDir = (prjpath + '/' + buildDir).toStdString();
+            }
         }
     }
 
@@ -1427,7 +1430,7 @@ void MainWindow::analyzeProject(const ProjectFile *projectFile)
     QFileInfo inf(projectFile->getFilename());
     const QString rootpath = projectFile->getRootPath();
 
-    mThread->setAddonsAndTools(projectFile->getAddonsAndTools());
+    mThread->setAddonsAndTools(projectFile->getAddonsAndTools(), mSettings->value(SETTINGS_MISRA_FILE).toString());
     mUI.mResults->setTags(projectFile->getTags());
 
     // If the root path is not given or is not "current dir", use project
@@ -1450,7 +1453,7 @@ void MainWindow::analyzeProject(const ProjectFile *projectFile)
                             QMessageBox::Yes | QMessageBox::No,
                             this);
             if (msg.exec() == QMessageBox::Yes) {
-                QDir().mkdir(buildDir);
+                QDir().mkpath(buildDir);
             }
         }
     }

@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2018 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -84,6 +84,9 @@ private:
 
         // dead pointer
         TEST_CASE(deadPointer);
+
+        // whole program analysis
+        TEST_CASE(ctu);
     }
 
     void checkUninitVar(const char code[], const char fname[] = "test.cpp", bool debugwarnings = false) {
@@ -3595,6 +3598,13 @@ private:
                        "}");
         ASSERT_EQUALS("", errout.str());
 
+        checkUninitVar("int f() {\n"
+                       "  char *p = (char *)malloc(256);\n"
+                       "  while(*p && *p == '_')\n"
+                       "    p++;\n"
+                       "}");
+        ASSERT_EQUALS("[test.cpp:3]: (error) Memory is allocated but not initialized: p\n", errout.str());
+
         // #6646 - init in for loop
         checkUninitVar("void f() {\n" // No FP
                        "  for (int i;;i++)\n"
@@ -3961,6 +3971,46 @@ private:
                          "    rep->setEventType(NDB_LE_Connected);\n"
                          "}");
         ASSERT_EQUALS("", errout.str());
+    }
+
+    void ctu(const char code[]) {
+        // Clear the error buffer..
+        errout.str("");
+
+        // Tokenize..
+        Tokenizer tokenizer(&settings, this);
+        std::istringstream istr(code);
+        tokenizer.tokenize(istr, "test.cpp");
+        tokenizer.simplifyTokenList2();
+
+        // Check code..
+        std::list<Check::FileInfo*> fileInfo;
+        CheckUninitVar check(&tokenizer, &settings, this);
+        fileInfo.push_back(check.getFileInfo(&tokenizer, &settings));
+        check.analyseWholeProgram(fileInfo, settings, *this);
+        while (!fileInfo.empty()) {
+            delete fileInfo.back();
+            fileInfo.pop_back();
+        }
+    }
+
+    void ctu() {
+        ctu("void f(int *p) {\n"
+            "    a = *p;\n"
+            "}\n"
+            "int main() {\n"
+            "  int x;\n"
+            "  f(&x);\n"
+            "}");
+        ASSERT_EQUALS("[test.cpp:6] -> [test.cpp:2]: (error) using argument p that points at uninitialized variable x\n", errout.str());
+
+        ctu("void use(int *p) { a = *p + 3; }\n"
+            "void call(int x, int *p) { x++; use(p); }\n"
+            "int main() {\n"
+            "  int x;\n"
+            "  call(4,&x);\n"
+            "}");
+        ASSERT_EQUALS("[test.cpp:5] -> [test.cpp:1]: (error) using argument p that points at uninitialized variable x\n", errout.str());
     }
 };
 

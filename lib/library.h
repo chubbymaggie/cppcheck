@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -429,6 +429,11 @@ public:
         return (it2 != platform_types.end()) ? &(it2->second) : nullptr;
     }
 
+    /**
+     * Get function name for function call
+     */
+    std::string getFunctionName(const Token *ftok) const;
+
 private:
     // load a <function> xml node
     Error loadFunction(const tinyxml2::XMLElement * const node, const std::string &name, std::set<std::string> &unknown_elements);
@@ -510,7 +515,6 @@ private:
     const ArgumentChecks * getarg(const Token *ftok, int argnr) const;
 
     std::string getFunctionName(const Token *ftok, bool *error) const;
-    std::string getFunctionName(const Token *ftok) const;
 
     static const AllocFunc* getAllocDealloc(const std::map<std::string, AllocFunc> &data, const std::string &name) {
         const std::map<std::string, AllocFunc>::const_iterator it = data.find(name);

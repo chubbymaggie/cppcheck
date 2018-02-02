@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -1009,8 +1009,7 @@ void CmdLineParser::PrintHelp()
               "    --version            Print out version number.\n"
               "    --xml                Write results in xml format to error stream (stderr).\n"
               "    --xml-version=<version>\n"
-              "                         Select the XML file version. Currently versions 1 and\n"
-              "                         2 are available. The default version is 1."
+              "                         Select the XML file version. Currently only versions 2 is available."
               "\n"
               "Example usage:\n"
               "  # Recursively check the current folder. Print the progress on the screen and\n"

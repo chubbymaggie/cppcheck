@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -74,13 +74,6 @@ public:
     void returnReference();
 
 private:
-    static bool isPtrArg(const Token *tok);
-    static bool isArrayArg(const Token *tok);
-    static bool isRefPtrArg(const Token *tok);
-    static bool isNonReferenceArg(const Token *tok);
-    static bool isAutoVar(const Token *tok);
-    static bool isAutoVarArray(const Token *tok);
-
     /**
      * Returning a temporary object?
      * @param tok pointing at the "return" token
@@ -89,6 +82,9 @@ private:
     static bool returnTemporary(const Token *tok);
 
     void errorReturnAddressToAutoVariable(const Token *tok);
+    void errorReturnAddressToAutoVariable(const Token *tok, const ValueFlow::Value *value);
+    void errorAssignAddressOfLocalArrayToGlobalPointer(const Token *pointer, const Token *array);
+    void errorAssignAddressOfLocalVariableToGlobalPointer(const Token *pointer, const Token *variable);
     void errorReturnPointerToLocalArray(const Token *tok);
     void errorAutoVariableAssignment(const Token *tok, bool inconclusive);
     void errorReturnReference(const Token *tok);
@@ -102,6 +98,7 @@ private:
         CheckAutoVariables c(nullptr,settings,errorLogger);
         c.errorAutoVariableAssignment(nullptr, false);
         c.errorReturnAddressToAutoVariable(nullptr);
+        c.errorAssignAddressOfLocalArrayToGlobalPointer(nullptr, nullptr);
         c.errorReturnPointerToLocalArray(nullptr);
         c.errorReturnReference(nullptr);
         c.errorReturnTempReference(nullptr);

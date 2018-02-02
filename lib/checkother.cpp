@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2018 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -526,12 +526,10 @@ void CheckOther::checkRedundantAssignment()
                         bool bailout = false;
                         for (const Token *tok3 = tok2->link(); tok3 != tok2; tok3 = tok3->previous()) {
                             if (tok3->varId()) {
-                                if (!tok3->variable())
+                                const Variable *var = tok3->variable();
+                                if (!var || !var->isConst() || var->isReference() || var->isPointer()) {
                                     bailout = true;
-                                else {
-                                    const Variable *var = tok3->variable();
-                                    if (!var->isConst() || var->isReference() || var->isPointer())
-                                        bailout = true;
+                                    break;
                                 }
                             }
                         }
@@ -1504,7 +1502,7 @@ void CheckOther::checkCharVariable()
                         v1 = tok->astOperand1()->getValueGE(0x80, _settings);
                     if (v1 && !(tok->str() == "&" && v2 && v2->isKnown() && v2->intvalue >= 0 && v2->intvalue < 0x100))
                         warn = true;
-                } else if (!warn && astIsSignedChar(tok->astOperand2())) {
+                } else if (astIsSignedChar(tok->astOperand2())) {
                     const ValueFlow::Value *v1 = tok->astOperand2()->getValueLE(-1, _settings);
                     const ValueFlow::Value *v2 = tok->astOperand1()->getMaxValue(false);
                     if (!v1)
@@ -2658,7 +2656,7 @@ void CheckOther::checkAccessOfMovedVariable()
                 }
             }
             if (accessOfMoved || (inconclusive && reportInconclusive))
-                accessMovedError(tok, tok->str(), movedValue->moveKind, inconclusive || movedValue->isInconclusive());
+                accessMovedError(tok, tok->str(), movedValue, inconclusive || movedValue->isInconclusive());
         }
     }
 }
@@ -2676,11 +2674,17 @@ bool CheckOther::isMovedParameterAllowedForInconclusiveFunction(const Token * to
     return true;
 }
 
-void CheckOther::accessMovedError(const Token *tok, const std::string &varname, ValueFlow::Value::MoveKind moveKind, bool inconclusive)
+void CheckOther::accessMovedError(const Token *tok, const std::string &varname, const ValueFlow::Value *value, bool inconclusive)
 {
+    if (!tok) {
+        reportError(tok, Severity::warning, "accessMoved", "Access of moved variable 'v'.", CWE672, false);
+        reportError(tok, Severity::warning, "accessForwarded", "Access of forwarded variable 'v'.", CWE672, false);
+        return;
+    }
+
     const char * errorId = nullptr;
-    const char * kindString = nullptr;
-    switch (moveKind) {
+    std::string kindString;
+    switch (value->moveKind) {
     case ValueFlow::Value::MovedVariable:
         errorId = "accessMoved";
         kindString = "moved";
@@ -2692,8 +2696,9 @@ void CheckOther::accessMovedError(const Token *tok, const std::string &varname, 
     default:
         return;
     }
-    const std::string errmsg(std::string("Access of ") + kindString + " variable " + varname + ".");
-    reportError(tok, Severity::warning, errorId, errmsg, CWE672, inconclusive);
+    const std::string errmsg("Access of " + kindString + " variable '" + varname + "'.");
+    const ErrorPath errorPath = getErrorPath(tok, value, errmsg);
+    reportError(errorPath, Severity::warning, errorId, errmsg, CWE672, inconclusive);
 }
 
 

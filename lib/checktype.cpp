@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -139,7 +139,7 @@ void CheckType::tooBigSignedBitwiseShiftError(const Token *tok, int lhsbits, con
 void CheckType::checkIntegerOverflow()
 {
     // unknown sizeof(int) => can't run this checker
-    if (_settings->platformType == Settings::Unspecified || _settings->int_bit >= 64)
+    if (_settings->platformType == Settings::Unspecified || _settings->int_bit >= MathLib::bigint_bits)
         return;
 
     for (const Token *tok = _tokenizer->tokens(); tok; tok = tok->next()) {
@@ -161,11 +161,11 @@ void CheckType::checkIntegerOverflow()
         else
             continue;
 
-        if (bits >= 64)
+        if (bits >= MathLib::bigint_bits)
             continue;
 
         // max value according to platform settings.
-        const MathLib::bigint maxvalue = (1LL << (bits - 1)) - 1;
+        const MathLib::bigint maxvalue = (((MathLib::bigint)1) << (bits - 1)) - 1;
 
         // is there a overflow result value
         const ValueFlow::Value *value = tok->getValueGE(maxvalue + 1, _settings);
@@ -175,7 +175,7 @@ void CheckType::checkIntegerOverflow()
             continue;
 
         // For left shift, it's common practice to shift into the sign bit
-        if (tok->str() == "<<" && value->intvalue > 0 && value->intvalue < (1LL << bits))
+        if (tok->str() == "<<" && value->intvalue > 0 && value->intvalue < (((MathLib::bigint)1) << bits))
             continue;
 
         integerOverflowError(tok, *value);
@@ -396,7 +396,7 @@ void CheckType::checkFloatToIntegerOverflow()
                     bits = _settings->long_long_bit;
                 else
                     continue;
-                if (bits < 64 && it->floatValue >= (1ULL << bits))
+                if (bits < MathLib::bigint_bits && it->floatValue >= (((MathLib::biguint)1) << bits))
                     floatToIntegerOverflowError(tok, *it);
             }
         }

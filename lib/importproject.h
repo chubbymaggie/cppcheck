@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -48,7 +48,7 @@ namespace cppcheck {
 class CPPCHECKLIB ImportProject {
 public:
     /** File settings. Multiple configurations for a file is allowed. */
-    struct FileSettings {
+    struct CPPCHECKLIB FileSettings {
         FileSettings() : platformType(cppcheck::Platform::Unspecified), msc(false), useMfc(false) {}
         std::string cfg;
         std::string filename;
@@ -74,8 +74,9 @@ public:
     void ignoreOtherPlatforms(cppcheck::Platform::PlatformType platformType);
 
     void import(const std::string &filename);
-private:
+protected:
     void importCompileCommands(std::istream &istr);
+private:
     void importSln(std::istream &istr, const std::string &path);
     void importVcxproj(const std::string &filename, std::map<std::string, std::string, cppcheck::stricmp> &variables, const std::string &additionalIncludeDirectories);
 };

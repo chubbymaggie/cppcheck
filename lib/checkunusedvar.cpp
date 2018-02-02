@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -79,7 +79,7 @@ public:
 
         /** is variable unused? */
         bool unused() const {
-            return (_read == false && _write == false);
+            return (!_read && !_write);
         }
 
         std::set<unsigned int> _aliases;
@@ -1362,6 +1362,11 @@ void CheckUnusedVar::checkStructMemberUsage()
         // Bail out if some data is casted to struct..
         const std::string castPattern("( struct| " + scope->className + " * ) & %name% [");
         if (Token::findmatch(scope->classEnd, castPattern.c_str()))
+            continue;
+
+        // (struct S){..}
+        const std::string initPattern("( struct| " + scope->className + " ) {");
+        if (Token::findmatch(scope->classEnd, initPattern.c_str()))
             continue;
 
         // Bail out if struct is used in sizeof..

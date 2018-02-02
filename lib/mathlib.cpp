@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,10 +17,9 @@
  */
 
 
+#include "mathlib.h"
 #include "errorlogger.h"
 #include "utils.h"
-
-#include "mathlib.h"
 
 #include <cctype>
 #include <cmath>
@@ -38,6 +37,8 @@
 #define ISINF(x)      (std::isinf(x))
 #define ISNAN(x)      (std::isnan(x))
 #endif
+
+const int MathLib::bigint_bits = 64;
 
 MathLib::value::value(const std::string &s) :
     intValue(0), doubleValue(0), isUnsigned(false)
@@ -269,6 +270,9 @@ MathLib::value MathLib::value::shiftLeft(const MathLib::value &v) const
     if (!isInt() || !v.isInt())
         throw InternalError(nullptr, "Shift operand is not integer");
     MathLib::value ret(*this);
+    if (v.intValue >= MathLib::bigint_bits) {
+        return ret;
+    }
     ret.intValue <<= v.intValue;
     return ret;
 }
@@ -278,6 +282,9 @@ MathLib::value MathLib::value::shiftRight(const MathLib::value &v) const
     if (!isInt() || !v.isInt())
         throw InternalError(nullptr, "Shift operand is not integer");
     MathLib::value ret(*this);
+    if (v.intValue >= MathLib::bigint_bits) {
+        return ret;
+    }
     ret.intValue >>= v.intValue;
     return ret;
 }

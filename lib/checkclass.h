@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -61,6 +61,7 @@ public:
 
         // can't be a simplified check .. the 'sizeof' is used.
         checkClass.checkMemset();
+        checkClass.checkUnsafeClassDivZero();
     }
 
     /** @brief Run checks on the simplified token list */
@@ -151,6 +152,9 @@ public:
     /** @brief Check that copy constructor and operator defined together */
     void checkCopyCtorAndEqOperator();
 
+    /** @brief Check that arbitrary usage of the public interface does not result in division by zero */
+    void checkUnsafeClassDivZero(bool test=false);
+
 private:
     const SymbolDatabase *symbolDatabase;
 
@@ -183,6 +187,7 @@ private:
     void callsPureVirtualFunctionError(const Function & scopeFunction, const std::list<const Token *> & tokStack, const std::string &purefuncname);
     void duplInheritedMembersError(const Token* tok1, const Token* tok2, const std::string &derivedname, const std::string &basename, const std::string &variablename, bool derivedIsStruct, bool baseIsStruct);
     void copyCtorAndEqOperatorError(const Token *tok, const std::string &classname, bool isStruct, bool hasCopyCtor);
+    void unsafeClassDivZeroError(const Token *tok, const std::string &className, const std::string &methodName, const std::string &varName);
 
     void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings) const {
         CheckClass c(nullptr, settings, errorLogger);
@@ -213,6 +218,7 @@ private:
         c.selfInitializationError(nullptr, "var");
         c.duplInheritedMembersError(nullptr, nullptr, "class", "class", "variable", false, false);
         c.copyCtorAndEqOperatorError(nullptr, "class", false, false);
+        c.unsafeClassDivZeroError(nullptr, "Class", "dostuff", "x");
     }
 
     static std::string myName() {
@@ -239,7 +245,8 @@ private:
                "- Suspicious subtraction from 'this'\n"
                "- Call of pure virtual function in constructor/destructor\n"
                "- Duplicated inherited data members\n"
-               "- If 'copy constructor' defined, 'operator=' also should be defined and vice versa\n";
+               "- If 'copy constructor' defined, 'operator=' also should be defined and vice versa\n"
+               "- Check that arbitrary usage of public interface does not result in division by zero\n";
     }
 
     // operatorEqRetRefThis helper functions

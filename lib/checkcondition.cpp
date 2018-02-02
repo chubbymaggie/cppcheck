@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -180,9 +180,9 @@ bool CheckCondition::assignIfParseScope(const Token * const assignTok,
                 }
                 if (Token::Match(tok2,"&&|%oror%|( %varid% ==|!= %num% &&|%oror%|)", varid)) {
                     const Token *vartok = tok2->next();
-                    const std::string& op(vartok->strAt(1));
                     const MathLib::bigint num2 = MathLib::toLongNumber(vartok->strAt(2));
                     if ((num & num2) != ((bitop=='&') ? num2 : num)) {
+                        const std::string& op(vartok->strAt(1));
                         const bool alwaysTrue = op == "!=";
                         const std::string condition(vartok->str() + op + vartok->strAt(2));
                         assignIfError(assignTok, tok2, condition, alwaysTrue);
@@ -632,8 +632,10 @@ void CheckCondition::multiCondition2()
                 }
                 bool changed = false;
                 for (std::set<unsigned int>::const_iterator it = vars.begin(); it != vars.end(); ++it) {
-                    if (isVariableChanged(tok1, tok2, *it, nonlocal, _settings))
+                    if (isVariableChanged(tok1, tok2, *it, nonlocal, _settings)) {
                         changed = true;
+                        break;
+                    }
                 }
                 if (changed)
                     break;
@@ -1010,14 +1012,14 @@ void CheckCondition::checkIncorrectLogicOperator()
                 incorrectLogicOperatorError(tok, text, alwaysTrue, inconclusive);
             } else if (printStyle && secondTrue) {
                 const std::string text = "If '" + cond1str + "', the comparison '" + cond2str +
-                                         "' is always " + (secondTrue ? "true" : "false") + ".";
+                                         "' is always true.";
                 redundantConditionError(tok, text, inconclusive);
             } else if (printStyle && firstTrue) {
                 //const std::string text = "The comparison " + cond1str + " is always " +
                 //                         (firstTrue ? "true" : "false") + " when " +
                 //                         cond2str + ".";
                 const std::string text = "If '" + cond2str + "', the comparison '" + cond1str +
-                                         "' is always " + (firstTrue ? "true" : "false") + ".";
+                                         "' is always true.";
                 redundantConditionError(tok, text, inconclusive);
             }
         }
@@ -1260,20 +1262,22 @@ void CheckCondition::alwaysTrueFalse()
             if (tokens.empty() && hasSizeof)
                 continue;
 
-            alwaysTrueFalseError(tok, tok->values().front().intvalue != 0);
+            alwaysTrueFalseError(tok, &tok->values().front());
         }
     }
 }
 
-void CheckCondition::alwaysTrueFalseError(const Token *tok, bool knownResult)
+void CheckCondition::alwaysTrueFalseError(const Token *tok, const ValueFlow::Value *value)
 {
+    const bool condvalue = value && (value->intvalue != 0);
     const std::string expr = tok ? tok->expressionString() : std::string("x");
-
-    reportError(tok,
+    const std::string errmsg = "Condition '" + expr + "' is always " + (condvalue ? "true" : "false");
+    const ErrorPath errorPath = getErrorPath(tok, value, errmsg);
+    reportError(errorPath,
                 Severity::style,
                 "knownConditionTrueFalse",
-                "Condition '" + expr + "' is always " + (knownResult ? "true" : "false"),
-                (knownResult ? CWE571 : CWE570), false);
+                errmsg,
+                (condvalue ? CWE571 : CWE570), false);
 }
 
 void CheckCondition::checkInvalidTestForOverflow()
@@ -1336,6 +1340,54 @@ void CheckCondition::invalidTestForOverflow(const Token* tok, bool result)
              (tok ? tok->expressionString() : std::string("x + u < x")) +
              "'. Condition is always " +
              std::string(result ? "true" : "false") +
-             " unless there is overflow, and overflow is UB.";
+             " unless there is overflow, and overflow is undefined behaviour.";
     reportError(tok, Severity::warning, "invalidTestForOverflow", errmsg, (result ? CWE571 : CWE570), false);
+}
+
+
+void CheckCondition::checkPointerAdditionResultNotNull()
+{
+    if (!_settings->isEnabled(Settings::WARNING))
+        return;
+
+    const SymbolDatabase *symbolDatabase = _tokenizer->getSymbolDatabase();
+    const std::size_t functions = symbolDatabase->functionScopes.size();
+    for (std::size_t i = 0; i < functions; ++i) {
+        const Scope * scope = symbolDatabase->functionScopes[i];
+
+        for (const Token* tok = scope->classStart; tok != scope->classEnd; tok = tok->next()) {
+            if (!tok->isComparisonOp() || !tok->astOperand1() || !tok->astOperand2())
+                continue;
+
+            // Macros might have pointless safety checks
+            if (tok->isExpandedMacro())
+                continue;
+
+            const Token *calcToken, *exprToken;
+            if (tok->astOperand1()->str() == "+") {
+                calcToken = tok->astOperand1();
+                exprToken = tok->astOperand2();
+            } else if (tok->astOperand2()->str() == "+") {
+                calcToken = tok->astOperand2();
+                exprToken = tok->astOperand1();
+            } else
+                continue;
+
+            // pointer comparison against NULL (ptr+12==0)
+            if (calcToken->hasKnownIntValue())
+                continue;
+            if (!calcToken->valueType() || calcToken->valueType()->pointer==0)
+                continue;
+            if (!exprToken->hasKnownIntValue() || !exprToken->getValue(0))
+                continue;
+
+            pointerAdditionResultNotNullError(tok, calcToken);
+        }
+    }
+}
+
+void CheckCondition::pointerAdditionResultNotNullError(const Token *tok, const Token *calc)
+{
+    const std::string s = calc ? calc->expressionString() : "ptr+1";
+    reportError(tok, Severity::warning, "pointerAdditionResultNotNull", "Comparison is wrong. Result of '" + s + "' can't be 0 unless there is pointer overflow, and pointer overflow is undefined behaviour.");
 }

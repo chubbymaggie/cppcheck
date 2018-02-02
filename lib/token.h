@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2018 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -238,24 +238,31 @@ public:
     }
     void tokType(Token::Type t) {
         _tokType = t;
+
+        bool memoizedIsName = (_tokType == eName || _tokType == eType || _tokType == eVariable ||
+                               _tokType == eFunction || _tokType == eKeyword || _tokType == eBoolean ||
+                               _tokType == eEnumerator); // TODO: "true"/"false" aren't really a name...
+        setFlag(fIsName, memoizedIsName);
+
+        bool memoizedIsLiteral = (_tokType == eNumber || _tokType == eString || _tokType == eChar ||
+                                  _tokType == eBoolean || _tokType == eLiteral || _tokType == eEnumerator);
+        setFlag(fIsLiteral, memoizedIsLiteral);
     }
     void isKeyword(bool kwd) {
         if (kwd)
-            _tokType = eKeyword;
+            tokType(eKeyword);
         else if (_tokType == eKeyword)
-            _tokType = eName;
+            tokType(eName);
     }
     bool isKeyword() const {
         return _tokType == eKeyword;
     }
     bool isName() const {
-        return _tokType == eName || _tokType == eType || _tokType == eVariable || _tokType == eFunction || _tokType == eKeyword ||
-               _tokType == eBoolean || _tokType == eEnumerator; // TODO: "true"/"false" aren't really a name...
+        return getFlag(fIsName);
     }
     bool isUpperCaseName() const;
     bool isLiteral() const {
-        return _tokType == eNumber || _tokType == eString || _tokType == eChar ||
-               _tokType == eBoolean || _tokType == eLiteral || _tokType == eEnumerator;
+        return getFlag(fIsLiteral);
     }
     bool isNumber() const {
         return _tokType == eNumber;
@@ -394,6 +401,9 @@ public:
     void isAttributePacked(bool value) {
         setFlag(fIsAttributePacked, value);
     }
+    bool isControlFlowKeyword() const {
+        return getFlag(fIsControlFlowKeyword);
+    }
     bool isOperatorKeyword() const {
         return getFlag(fIsOperatorKeyword);
     }
@@ -411,6 +421,12 @@ public:
     }
     void isEnumType(bool value) {
         setFlag(fIsEnumType, value);
+    }
+    bool isTemplateArg() const {
+        return getFlag(fIsTemplateArg);
+    }
+    void isTemplateArg(bool value) {
+        setFlag(fIsTemplateArg, value);
     }
 
     static const Token *findsimplematch(const Token * const startTok, const char pattern[]);
@@ -502,7 +518,7 @@ public:
     void varId(unsigned int id) {
         _varId = id;
         if (id != 0) {
-            _tokType = eVariable;
+            tokType(eVariable);
             isStandardType(false);
         } else {
             update_property_info();
@@ -616,9 +632,9 @@ public:
     void function(const Function *f) {
         _function = f;
         if (f)
-            _tokType = eFunction;
+            tokType(eFunction);
         else if (_tokType == eFunction)
-            _tokType = eName;
+            tokType(eName);
     }
 
     /**
@@ -635,9 +651,9 @@ public:
     void variable(const Variable *v) {
         _variable = v;
         if (v || _varId)
-            _tokType = eVariable;
+            tokType(eVariable);
         else if (_tokType == eVariable)
-            _tokType = eName;
+            tokType(eName);
     }
 
     /**
@@ -674,9 +690,9 @@ public:
     void enumerator(const Enumerator *e) {
         _enumerator = e;
         if (e)
-            _tokType = eEnumerator;
+            tokType(eEnumerator);
         else if (_tokType == eEnumerator)
-            _tokType = eName;
+            tokType(eName);
     }
 
     /**
@@ -882,9 +898,13 @@ private:
         fIsAttributeNothrow     = (1 << 13), // __attribute__((nothrow)), __declspec(nothrow)
         fIsAttributeUsed        = (1 << 14), // __attribute__((used))
         fIsAttributePacked      = (1 << 15), // __attribute__((packed))
-        fIsOperatorKeyword      = (1 << 16), // operator=, etc
-        fIsComplex              = (1 << 17), // complex/_Complex type
-        fIsEnumType             = (1 << 18)  // enumeration type
+        fIsControlFlowKeyword   = (1 << 16), // if/switch/while/...
+        fIsOperatorKeyword      = (1 << 17), // operator=, etc
+        fIsComplex              = (1 << 18), // complex/_Complex type
+        fIsEnumType             = (1 << 19), // enumeration type
+        fIsName                 = (1 << 20),
+        fIsLiteral              = (1 << 21),
+        fIsTemplateArg          = (1 << 22),
     };
 
     unsigned int _flags;

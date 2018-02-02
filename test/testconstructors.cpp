@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -143,6 +143,7 @@ private:
         TEST_CASE(uninitVar28); // ticket #6258
         TEST_CASE(uninitVar29);
         TEST_CASE(uninitVar30); // ticket #6417
+        TEST_CASE(uninitVar31); // ticket #8271
         TEST_CASE(uninitVarEnum);
         TEST_CASE(uninitVarStream);
         TEST_CASE(uninitVarTypedef);
@@ -186,6 +187,7 @@ private:
         TEST_CASE(constructors_crash1);    // ticket #5641
         TEST_CASE(classWithOperatorInName);// ticket #2827
         TEST_CASE(templateConstructor);    // ticket #7942
+        TEST_CASE(typedefArray);           // ticket #5766
 
         TEST_CASE(uninitAssignmentWithOperator);  // ticket #7429
         TEST_CASE(uninitCompoundAssignment);      // ticket #7429
@@ -2327,6 +2329,24 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
+    void uninitVar31() { // ticket #8271
+        check("void bar();\n"
+              "class MyClass {\n"
+              "public:\n"
+              "    MyClass();\n"
+              "    void Restart();\n"
+              "protected:\n"
+              "    int m_retCode;\n"
+              "};\n"
+              "MyClass::MyClass() {\n"
+              "    bar(),Restart();\n"
+              "}\n"
+              "void MyClass::Restart() {\n"
+              "    m_retCode = 0;\n"
+              "}\n");
+        ASSERT_EQUALS("", errout.str());
+    }
+
     void uninitVarArray1() {
         check("class John\n"
               "{\n"
@@ -3375,6 +3395,16 @@ private:
               "};\n"
               "template <class T> Containter<T>::Containter() : mElements(nullptr) {}\n"
               "Containter<int> intContainer;");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void typedefArray() { // ticket #5766
+        check("typedef float    rvec[3];\n"
+              "class SelectionPosition {\n"
+              "public:\n"
+              "    SelectionPosition() {}\n"
+              "    const rvec &x() const;\n"
+              "};");
         ASSERT_EQUALS("", errout.str());
     }
 

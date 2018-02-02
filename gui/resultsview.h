@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -311,6 +311,21 @@ public slots:
      */
     void debugError(const ErrorItem &item);
 
+    /**
+     * \brief Clear log messages
+     */
+    void logClear();
+
+    /**
+     * \brief Copy selected log message entry
+     */
+    void logCopyEntry();
+
+    /**
+     * \brief Copy all log messages
+     */
+    void logCopyComplete();
+
 protected:
     /**
     * @brief Should we show a "No errors found dialog" every time no errors were found?
@@ -320,6 +335,12 @@ protected:
     Ui::ResultsView mUI;
 
     CheckStatistics *mStatistics;
+private slots:
+    /**
+     * @brief Custom context menu for Analysis Log
+     * @param pos Mouse click position
+     */
+    void on_mListLog_customContextMenuRequested(const QPoint &pos);
 };
 /// @}
 #endif // RESULTSVIEW_H

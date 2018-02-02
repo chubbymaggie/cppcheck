@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -28,6 +28,8 @@
 #include <QSettings>
 #include <QDir>
 #include <QDate>
+#include <QMenu>
+#include <QClipboard>
 #include "common.h"
 #include "erroritem.h"
 #include "resultsview.h"
@@ -59,6 +61,8 @@ ResultsView::ResultsView(QWidget * parent) :
     connect(this, &ResultsView::collapseAllResults, mUI.mTree, &ResultsTree::collapseAll);
     connect(this, &ResultsView::expandAllResults, mUI.mTree, &ResultsTree::expandAll);
     connect(this, &ResultsView::showHiddenResults, mUI.mTree, &ResultsTree::showHiddenResults);
+
+    mUI.mListLog->setContextMenuPolicy(Qt::CustomContextMenu);
 }
 
 void ResultsView::initialize(QSettings *settings, ApplicationList *list, ThreadHandler *checkThreadHandler)
@@ -401,4 +405,45 @@ void ResultsView::log(const QString &str)
 void ResultsView::debugError(const ErrorItem &item)
 {
     mUI.mListLog->addItem(item.ToString());
+}
+
+void ResultsView::logClear()
+{
+    mUI.mListLog->clear();
+}
+
+void ResultsView::logCopyEntry()
+{
+    const QListWidgetItem * item = mUI.mListLog->currentItem();
+    if (nullptr != item) {
+        QClipboard *clipboard = QApplication::clipboard();
+        clipboard->setText(item->text());
+    }
+}
+
+void ResultsView::logCopyComplete()
+{
+    QString logText;
+    for (int i=0; i < mUI.mListLog->count(); ++i) {
+        const QListWidgetItem * item = mUI.mListLog->item(i);
+        if (nullptr != item) {
+            logText += item->text();
+        }
+    }
+    QClipboard *clipboard = QApplication::clipboard();
+    clipboard->setText(logText);
+}
+
+void ResultsView::on_mListLog_customContextMenuRequested(const QPoint &pos)
+{
+    if (mUI.mListLog->count() > 0) {
+        QPoint globalPos = mUI.mListLog->mapToGlobal(pos);
+
+        QMenu contextMenu;
+        contextMenu.addAction(tr("Clear Log"), this, SLOT(logClear()));
+        contextMenu.addAction(tr("Copy this Log entry"), this, SLOT(logCopyEntry()));
+        contextMenu.addAction(tr("Copy complete Log"), this, SLOT(logCopyComplete()));
+
+        contextMenu.exec(globalPos);
+    }
 }

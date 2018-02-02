@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -88,19 +88,32 @@ void CheckInternal::checkTokenMatchPatterns()
 void CheckInternal::checkRedundantTokCheck()
 {
     for (const Token *tok = _tokenizer->tokens(); tok; tok = tok->next()) {
-        if (!Token::Match(tok, "&& Token :: simpleMatch|Match|findsimplematch|findmatch ("))
-            continue;
-        // in code like
-        // if (tok->previous() && Token::match(tok->previous(), "bla")) {}
-        // the first tok->previous() check is redundant
-        const Token *astOp1 = tok->astOperand1();
-        const Token *astOp2 = getArguments(tok->tokAt(3))[0];
+        if (Token::Match(tok, "&& Token :: simpleMatch|Match|findsimplematch|findmatch (")) {
+            // in code like
+            // if (tok->previous() && Token::match(tok->previous(), "bla")) {}
+            // the first tok->previous() check is redundant
+            const Token *astOp1 = tok->astOperand1();
+            const Token *astOp2 = getArguments(tok->tokAt(3))[0];
 
-        if (astOp1->expressionString() == astOp2->expressionString()) {
-            checkRedundantTokCheckError(astOp2);
+            if (astOp1->expressionString() == astOp2->expressionString()) {
+                checkRedundantTokCheckError(astOp2);
+            }
+            // if (!tok || !Token::match(tok, "foo"))
+        } else if (Token::Match(tok, "%oror% ! Token :: simpleMatch|Match|findsimplematch|findmatch (")) {
+            const Token *negTok = tok->next()->astParent()->astOperand1();
+            // the first tok condition is negated
+            if (Token::simpleMatch(negTok, "!")) {
+                const Token *astOp1 = negTok->astOperand1();
+                const Token *astOp2 = getArguments(tok->tokAt(4))[0];
+
+                if (astOp1->expressionString() == astOp2->expressionString()) {
+                    checkRedundantTokCheckError(astOp2);
+                }
+            }
         }
     }
 }
+
 
 void CheckInternal::checkRedundantTokCheckError(const Token* tok)
 {

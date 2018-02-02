@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2018 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -93,7 +93,9 @@ unsigned int CppCheck::check(const ImportProject::FileSettings &fs)
 {
     CppCheck temp(_errorLogger, _useGlobalSuppressions);
     temp._settings = _settings;
-    temp._settings.userDefines = fs.cppcheckDefines();
+    if (!temp._settings.userDefines.empty())
+        temp._settings.userDefines += ';';
+    temp._settings.userDefines += fs.cppcheckDefines();
     temp._settings.includePaths = fs.includePaths;
     // TODO: temp._settings.userUndefs = fs.undefs;
     if (fs.platformType != Settings::Unspecified) {
@@ -114,7 +116,7 @@ unsigned int CppCheck::processFile(const std::string& filename, const std::strin
     if (_settings.terminated())
         return exitcode;
 
-    if (_settings.quiet == false) {
+    if (!_settings.quiet) {
         std::string fixedpath = Path::simplifyPath(filename);
         fixedpath = Path::toNativeSeparators(fixedpath);
         _errorLogger.reportOut(std::string("Checking ") + fixedpath + ' ' + cfgname + std::string("..."));
@@ -312,7 +314,7 @@ unsigned int CppCheck::processFile(const std::string& filename, const std::strin
             cfg = *it;
 
             // If only errors are printed, print filename after the check
-            if (_settings.quiet == false && (!cfg.empty() || it != configurations.begin())) {
+            if (!_settings.quiet && (!cfg.empty() || it != configurations.begin())) {
                 std::string fixedpath = Path::simplifyPath(filename);
                 fixedpath = Path::toNativeSeparators(fixedpath);
                 _errorLogger.reportOut("Checking " + fixedpath + ": " + cfg + "...");
@@ -807,11 +809,13 @@ void CppCheck::getErrorMessages()
     Preprocessor::getErrorMessages(this, &s);
 }
 
-void CppCheck::analyseWholeProgram()
+bool CppCheck::analyseWholeProgram()
 {
+    bool errors = false;
     // Analyse the tokens
     for (std::list<Check *>::const_iterator it = Check::instances().begin(); it != Check::instances().end(); ++it)
-        (*it)->analyseWholeProgram(fileInfo, _settings, *this);
+        errors |= (*it)->analyseWholeProgram(fileInfo, _settings, *this);
+    return errors;
 }
 
 void CppCheck::analyseWholeProgram(const std::string &buildDir, const std::map<std::string, std::size_t> &files)
@@ -864,7 +868,7 @@ void CppCheck::analyseWholeProgram(const std::string &buildDir, const std::map<s
         (*it)->analyseWholeProgram(fileInfoList, _settings, *this);
 
     for (std::list<Check::FileInfo*>::iterator fi = fileInfoList.begin(); fi != fileInfoList.end(); ++fi)
-        delete(*fi);
+        delete (*fi);
 }
 
 bool CppCheck::isUnusedFunctionCheckEnabled() const

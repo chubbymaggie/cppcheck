@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2018 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -773,7 +773,7 @@ private:
                 "    x = y;\n"
                 "    if (x == 123) {}\n"
                 "}");
-        ASSERT_EQUALS("[test.cpp:2]: (debug) ValueFlow bailout: assignment of x\n", errout.str());
+        ASSERT_EQUALS_WITHOUT_LINENUMBERS("[test.cpp:2]: (debug) valueflow.cpp:1035:valueFlowReverse bailout: assignment of x\n", errout.str());
     }
 
     void valueFlowBeforeConditionAndAndOrOrGuard() { // guarding by &&
@@ -888,13 +888,13 @@ private:
         bailout("void f(int x) {\n"
                 "    y = ((x<0) ? x : ((x==2)?3:4));\n"
                 "}");
-        ASSERT_EQUALS("[test.cpp:2]: (debug) ValueFlow bailout: no simplification of x within ?: expression\n", errout.str());
+        ASSERT_EQUALS_WITHOUT_LINENUMBERS("[test.cpp:2]: (debug) valueflow.cpp:1113:valueFlowReverse bailout: no simplification of x within ?: expression\n", errout.str());
 
         bailout("int f(int x) {\n"
                 "  int r = x ? 1 / x : 0;\n"
                 "  if (x == 0) {}\n"
                 "}");
-        ASSERT_EQUALS("[test.cpp:2]: (debug) ValueFlow bailout: no simplification of x within ?: expression\n", errout.str());
+        ASSERT_EQUALS_WITHOUT_LINENUMBERS("[test.cpp:2]: (debug) valueflow.cpp:1113:valueFlowReverse bailout: no simplification of x within ?: expression\n", errout.str());
 
         code = "void f(int x) {\n"
                "    int a =v x;\n"
@@ -952,7 +952,7 @@ private:
                 "    if (x != 123) { b = x; }\n"
                 "    if (x == 123) {}\n"
                 "}");
-        ASSERT_EQUALS("[test.cpp:2]: (debug) ValueFlow bailout: variable x stopping on }\n", errout.str());
+        ASSERT_EQUALS_WITHOUT_LINENUMBERS("[test.cpp:2]: (debug) valueflow.cpp:1144:valueFlowReverse bailout: variable x stopping on }\n", errout.str());
 
         code = "void f(int x) {\n"
                "  a = x;\n"
@@ -963,16 +963,17 @@ private:
     }
 
     void valueFlowBeforeConditionGlobalVariables() {
-        // bailout: global variables
-        bailout("int x;\n"
-                "void f() {\n"
-                "    int a = x;\n"
-                "    if (x == 123) {}\n"
-                "}");
-        ASSERT_EQUALS("[test.cpp:4]: (debug) ValueFlow bailout: global variable x\n", errout.str());
-
-        // class variable
         const char *code;
+
+        // handle global variables
+        code = "int x;\n"
+               "void f() {\n"
+               "    int a = x;\n"
+               "    if (x == 123) {}\n"
+               "}";
+        ASSERT_EQUALS(true, testValueOfX(code,3,123));
+
+        // bailout when there is function call
         code = "class Fred { int x; void clear(); void f(); };\n"
                "void Fred::f() {\n"
                "    int a = x;\n"
@@ -991,7 +992,7 @@ private:
                 "    case 2: if (x==5) {} break;\n"
                 "    };\n"
                 "}");
-        ASSERT_EQUALS("[test.cpp:3]: (debug) ValueFlow bailout: variable x stopping on break\n", errout.str());
+        ASSERT_EQUALS_WITHOUT_LINENUMBERS("[test.cpp:3]: (debug) valueflow.cpp:1180:valueFlowReverse bailout: variable x stopping on break\n", errout.str());
 
         bailout("void f(int x, int y) {\n"
                 "    switch (y) {\n"
@@ -999,7 +1000,7 @@ private:
                 "    case 2: if (x==5) {} break;\n"
                 "    };\n"
                 "}");
-        ASSERT_EQUALS("[test.cpp:3]: (debug) ValueFlow bailout: variable x stopping on return\n", errout.str());
+        ASSERT_EQUALS_WITHOUT_LINENUMBERS("[test.cpp:3]: (debug) valueflow.cpp:1180:valueFlowReverse bailout: variable x stopping on return\n", errout.str());
     }
 
     void valueFlowBeforeConditionMacro() {
@@ -1009,7 +1010,7 @@ private:
                 "    a = x;\n"
                 "    M;\n"
                 "}");
-        ASSERT_EQUALS("[test.cpp:4]: (debug) ValueFlow bailout: variable x, condition is defined in macro\n", errout.str());
+        ASSERT_EQUALS_WITHOUT_LINENUMBERS("[test.cpp:4]: (debug) valueflow.cpp:1260:valueFlowBeforeCondition bailout: variable x, condition is defined in macro\n", errout.str());
     }
 
     void valueFlowBeforeConditionGoto() {
@@ -1020,9 +1021,9 @@ private:
                 "out:"
                 "    if (x==123){}\n"
                 "}");
-        ASSERT_EQUALS("[test.cpp:4]: (debug) ValueFlow bailout: variable x stopping on goto label\n"
-                      "[test.cpp:2]: (debug) ValueFlow bailout: variable x. noreturn conditional scope.\n"
-                      , errout.str());
+        ASSERT_EQUALS_WITHOUT_LINENUMBERS("[test.cpp:4]: (debug) valueflow.cpp:1131:valueFlowReverse bailout: variable x stopping on goto label\n"
+                                          "[test.cpp:2]: (debug) valueflow.cpp:1813:valueFlowForward bailout: variable x. noreturn conditional scope.\n"
+                                          , errout.str());
 
         // #5721 - FP
         bailout("static void f(int rc) {\n"
@@ -1035,10 +1036,10 @@ private:
                 "out:\n"
                 "    if (abc) {}\n"
                 "}\n");
-        ASSERT_EQUALS("[test.cpp:2]: (debug) ValueFlow bailout: assignment of abc\n"
-                      "[test.cpp:8]: (debug) ValueFlow bailout: variable abc stopping on goto label\n"
-                      "[test.cpp:3]: (debug) ValueFlow bailout: variable abc. noreturn conditional scope.\n",
-                      errout.str());
+        ASSERT_EQUALS_WITHOUT_LINENUMBERS("[test.cpp:2]: (debug) valueflow.cpp:1035:valueFlowReverse bailout: assignment of abc\n"
+                                          "[test.cpp:8]: (debug) valueflow.cpp:1131:valueFlowReverse bailout: variable abc stopping on goto label\n"
+                                          "[test.cpp:3]: (debug) valueflow.cpp:1813:valueFlowForward bailout: variable abc. noreturn conditional scope.\n",
+                                          errout.str());
     }
 
     void valueFlowAfterAssign() {
@@ -1784,7 +1785,7 @@ private:
                "    x += 67;\n"
                "    return x;\n"
                "}";
-        ASSERT_EQUALS(true, testValueOfX(code, 4U, 123.45 + 67, 0.01));
+        ASSERT_EQUALS(true, testValueOfX(code, 4U, 123.45F + 67, 0.01F));
     }
 
     void valueFlowForwardCorrelatedVariables() {
@@ -1873,15 +1874,23 @@ private:
     void valueFlowSwitchVariable() {
         const char *code;
         code = "void f(int x) {\n"
-               "    a = x;\n"  // <- x can be 14
+               "    a = x - 1;\n"  // <- x can be 14
                "    switch (x) {\n"
-               "    case 14: a=x; break;\n"  // <- x is 14
+               "    case 14: a=x+2; break;\n"  // <- x is 14
                "    };\n"
                "    a = x;\n"  // <- x can be 14
                "}";
         ASSERT_EQUALS(true, testConditionalValueOfX(code, 2U, 14));
         ASSERT_EQUALS(true, testConditionalValueOfX(code, 4U, 14));
         ASSERT_EQUALS(true, testConditionalValueOfX(code, 6U, 14));
+
+        ValueFlow::Value value1 = valueOfTok(code, "-");
+        ASSERT_EQUALS(13, value1.intvalue);
+        ASSERT(!value1.isKnown());
+
+        ValueFlow::Value value2 = valueOfTok(code, "+");
+        ASSERT_EQUALS(16, value2.intvalue);
+        ASSERT(value2.isKnown());
     }
 
     void valueFlowForLoop() {
@@ -2007,6 +2016,18 @@ private:
                "  }\n"
                "}\n";
         ASSERT_EQUALS(false, testValueOfX(code, 3U, 0));
+
+        // Ticket #7139
+        // "<<" in third expression of for
+        code = "void f(void) {\n"
+               "    int bit, x;\n"
+               "    for (bit = 1, x = 0; bit < 128; bit = bit << 1, x++) {\n"
+               "        z = x;\n"       // <- known value [0..6]
+               "    }\n"
+               "}\n";
+        ASSERT_EQUALS(true, testValueOfX(code, 4U, 0));
+        ASSERT_EQUALS(true, testValueOfX(code, 4U, 6));
+        ASSERT_EQUALS(false, testValueOfX(code, 4U, 7));
 
         // &&
         code = "void foo() {\n"
@@ -2383,6 +2404,27 @@ private:
 
         code = "void f() {\n"
                "  int x = 0;\n"
+               "  dostuff(&x);\n"
+               "  if (x < 0) {}\n"
+               "}\n";
+        ASSERT(isNotKnownValues(code, "<"));
+
+        code = "void f() {\n"
+               "  int x = 0;\n"
+               "  dostuff(0 ? ptr : &x);\n"
+               "  if (x < 0) {}\n"
+               "}\n";
+        ASSERT(isNotKnownValues(code, "<"));
+
+        code = "void f() {\n"
+               "  int x = 0;\n"
+               "  dostuff(unknown ? ptr : &x);\n"
+               "  if (x < 0) {}\n"
+               "}\n";
+        ASSERT(isNotKnownValues(code, "<"));
+
+        code = "void f() {\n"
+               "  int x = 0;\n"
                "  fred.dostuff(x);\n"
                "  if (x < 0) {}\n"
                "}\n";
@@ -2580,18 +2622,12 @@ private:
         ASSERT_EQUALS(0, value.intvalue);
         ASSERT(value.isKnown());
 
-        // Ticket #7139
-        // "<<" in third expression of for
-        code = "void f(void) {\n"
-               "    int bit, x;\n"
-               "    for (bit = 1, x = 0; bit < 128; bit = bit << 1, x++) {\n"
-               "        z = x;\n"       // <- known value [0..6]
-               "    }\n"
-               "}\n";
-        ASSERT_EQUALS(true, testValueOfX(code, 4U, 0));
-        ASSERT_EQUALS(true, testValueOfX(code, 4U, 6));
-        ASSERT_EQUALS(false, testValueOfX(code, 4U, 7));
-        ASSERT(value.isKnown());
+        // template parameters are not known
+        code = "template <int X> void f() { a = X; }\n"
+               "f<1>();";
+        value = valueOfTok(code, "1");
+        ASSERT_EQUALS(1, value.intvalue);
+        ASSERT_EQUALS(false, value.isKnown());
     }
 
     void valueFlowSizeofForwardDeclaredEnum() {
@@ -2721,6 +2757,19 @@ private:
                "}";
         values = tokenValues(code, "n ==");
         ASSERT_EQUALS(true, values.size() != 1U || !values.front().isUninitValue());
+
+        // #8233
+        code = "void foo() {\n"
+               "  int x;\n"
+               "  int y = 1;\n"
+               "  if (y>1)\n"
+               "    x = 1;\n"
+               "  else\n"
+               "    x = 1;\n"
+               "  if (x>1) {}\n"
+               "}";
+        values = tokenValues(code, "x >");
+        ASSERT_EQUALS(true, values.size() == 1U && values.front().isIntValue());
     }
 };
 

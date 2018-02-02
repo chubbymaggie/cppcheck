@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -51,6 +51,8 @@ private:
         TEST_CASE(sprintf4);        // struct member
 
         TEST_CASE(incorrectStringCompare);
+
+        TEST_CASE(deadStrcmp);
     }
 
     void check(const char code[], const char filename[] = "test.cpp") {
@@ -577,6 +579,22 @@ private:
               "    return f2(\"Hello\");\n"
               "}");
         ASSERT_EQUALS("", errout.str());
+    }
+
+    void deadStrcmp() {
+        check("void f(const char *str) {\n"
+              "  if (strcmp(str, \"abc\") == 0 || strcmp(str, \"def\")) {}\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:2]: (warning) The expression 'strcmp(str,\"def\") != 0' is suspicious. It overlaps 'strcmp(str,\"abc\") == 0'.\n", errout.str());
+
+        check("struct X {\n"
+              "  char *str;\n"
+              "};\n"
+              "\n"
+              "void f(const struct X *x) {\n"
+              "  if (strcmp(x->str, \"abc\") == 0 || strcmp(x->str, \"def\")) {}\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:6]: (warning) The expression 'strcmp(x->str,\"def\") != 0' is suspicious. It overlaps 'strcmp(x->str,\"abc\") == 0'.\n", errout.str());
     }
 };
 

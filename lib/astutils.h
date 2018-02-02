@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -73,6 +73,17 @@ bool isWithoutSideEffects(bool cpp, const Token* tok);
 
 /** Is scope a return scope (scope will unconditionally return) */
 bool isReturnScope(const Token *endToken);
+
+/** Is variable changed by function call?
+ * In case the answer of the question is inconclusive, e.g. because the function declaration is not known
+ * the return value is false and the output parameter inconclusive is set to true
+ *
+ * @param tok           ast tree
+ * @param varid         Variable Id
+ * @param settings      program settings
+ * @param inconclusive  pointer to output variable which indicates that the answer of the question is inconclusive
+ */
+bool isVariableChangedByFunctionCall(const Token *tok, unsigned int varid, const Settings *settings, bool *inconclusive);
 
 /** Is variable changed by function call?
  * In case the answer of the question is inconclusive, e.g. because the function declaration is not known

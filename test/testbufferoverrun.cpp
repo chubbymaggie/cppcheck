@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -185,6 +185,7 @@ private:
         // char *p2 = a + 11   // UB
         TEST_CASE(pointer_out_of_bounds_1);
         TEST_CASE(pointer_out_of_bounds_2);
+        TEST_CASE(pointer_out_of_bounds_3);
         TEST_CASE(pointer_out_of_bounds_sub);
 
         TEST_CASE(strncat1);
@@ -2795,6 +2796,14 @@ private:
         ASSERT_EQUALS("", errout.str());
     }
 
+    void pointer_out_of_bounds_3() {
+        check("struct S { int a[10]; };\n"
+              "void f(struct S *s) {\n"
+              "    char *p = s->a + 100;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:3]: (portability) Undefined behaviour, pointer arithmetic 's->a+100' is out of bounds.\n", errout.str());
+    }
+
     void pointer_out_of_bounds_sub() {
         check("void f() {\n"
               "    char x[10];\n"
@@ -2984,6 +2993,15 @@ private:
               "    tab4[20] = 0;\n"
               "}");
         ASSERT_EQUALS("[test.cpp:3]: (error) Array 'tab4[20]' accessed at index 20, which is out of bounds.\n", errout.str());
+
+        // ticket #1478
+        check("void foo() {\n"
+              "    char *p = malloc(10);\n"
+              "    free(p);\n"
+              "    p = malloc(10);\n"
+              "    p[10] = 0;\n"
+              "}");
+        ASSERT_EQUALS("[test.cpp:5]: (error) Array 'p[10]' accessed at index 10, which is out of bounds.\n", errout.str());
 
         // ticket #1134
         check("void f() {\n"

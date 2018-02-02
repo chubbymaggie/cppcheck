@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2018 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -100,13 +100,24 @@ public:
     std::vector<BaseInfo> derivedFrom;
     std::list<FriendInfo> friendList;
 
+    const Token * typeStart;
+    const Token * typeEnd;
+
     Type(const Token* classDef_ = nullptr, const Scope* classScope_ = nullptr, const Scope* enclosingScope_ = nullptr) :
         classDef(classDef_),
         classScope(classScope_),
         enclosingScope(enclosingScope_),
-        needInitialization(Unknown) {
+        needInitialization(Unknown),
+        typeStart(nullptr),
+        typeEnd(nullptr) {
         if (classDef_ && classDef_->str() == "enum")
             needInitialization = True;
+        else if (classDef_ && classDef_->str() == "using") {
+            typeStart = classDef->tokAt(3);
+            typeEnd = typeStart;
+            while (typeEnd->next() && typeEnd->next()->str() != ";")
+                typeEnd = typeEnd->next();
+        }
     }
 
     const std::string& name() const;
@@ -121,6 +132,10 @@ public:
 
     bool isEnumType() const {
         return classDef && classDef->str() == "enum";
+    }
+
+    bool isTypeAlias() const {
+        return classDef && classDef->str() == "using";
     }
 
     bool isStructType() const {
@@ -903,7 +918,7 @@ public:
     std::list<UsingInfo> usingList;
     ScopeType type;
     Type* definedType;
-    std::list<Type*> definedTypes;
+    std::map<std::string, Type*> definedTypesMap;
 
     // function specific fields
     const Scope *functionOf; // scope this function belongs to
@@ -925,6 +940,10 @@ public:
 
     bool isClassOrStruct() const {
         return (type == eClass || type == eStruct);
+    }
+
+    bool isClassOrStructOrUnion() const {
+        return (type == eClass || type == eStruct || type == eUnion);
     }
 
     bool isExecutable() const {
@@ -1159,6 +1178,7 @@ private:
     void createSymbolDatabaseFindAllScopes();
     void createSymbolDatabaseClassInfo();
     void createSymbolDatabaseVariableInfo();
+    void createSymbolDatabaseCopyAndMoveConstructors();
     void createSymbolDatabaseFunctionScopes();
     void createSymbolDatabaseClassAndStructScopes();
     void createSymbolDatabaseFunctionReturnTypes();
@@ -1207,6 +1227,9 @@ private:
 
     bool cpp;
     ValueType::Sign defaultSignedness;
+
+    /** "negative cache" list of tokens that we find are not enumeration values */
+    mutable std::set<std::string> tokensThatAreNotEnumeratorValues;
 };
 
 

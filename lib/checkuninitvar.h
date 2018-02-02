@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -91,12 +91,57 @@ public:
     /* data for multifile checking */
     class MyFileInfo : public Check::FileInfo {
     public:
-        /* functions that must have initialized data */
-        std::set<std::string>  uvarFunctions;
+        struct FunctionArg {
+            FunctionArg(const std::string &id_, const std::string &functionName_, unsigned int argnr_, const std::string &fileName, unsigned int linenr, const std::string &varname)
+                : id(id_),
+                  functionName(functionName_),
+                  argnr(argnr_),
+                  argnr2(0),
+                  variableName(varname) {
+                location.fileName = fileName;
+                location.linenr   = linenr;
+            }
 
-        /* functions calls with uninitialized data */
-        std::set<std::string>  functionCalls;
+            FunctionArg(const Tokenizer *tokenizer, const Scope *scope, unsigned int argnr_, const Token *tok);
+
+            std::string id;
+            std::string id2;
+            std::string functionName;
+            unsigned int argnr;
+            unsigned int argnr2;
+            std::string variableName;
+            struct {
+                std::string fileName;
+                unsigned int linenr;
+            } location;
+        };
+
+        /** uninitialized function args */
+        std::list<FunctionArg> uninitialized;
+
+        /** function arguments that data are unconditionally read */
+        std::list<FunctionArg> readData;
+
+        /** null pointer function args */
+        std::list<FunctionArg> nullPointer;
+
+        /** function arguments that are unconditionally dereferenced */
+        std::list<FunctionArg> dereferenced;
+
+        /** function calls other function.. */
+        std::list<FunctionArg> nestedCall;
+
+        /** Convert MyFileInfo data into xml string */
+        std::string toString() const;
     };
+
+    /** @brief Parse current TU and extract file info */
+    Check::FileInfo *getFileInfo(const Tokenizer *tokenizer, const Settings *settings) const;
+
+    Check::FileInfo * loadFileInfoFromXml(const tinyxml2::XMLElement *xmlElement) const;
+
+    /** @brief Analyse all file infos for all TU */
+    bool analyseWholeProgram(const std::list<Check::FileInfo*> &fileInfo, const Settings& settings, ErrorLogger &errorLogger);
 
     void uninitstringError(const Token *tok, const std::string &varname, bool strncpy_);
     void uninitdataError(const Token *tok, const std::string &varname);
@@ -110,6 +155,9 @@ public:
     void uninitStructMemberError(const Token *tok, const std::string &membername);
 
 private:
+    Check::FileInfo *getFileInfo() const;
+    bool isUnsafeFunction(const Scope *scope, int argnr, const Token **tok) const;
+
     void getErrorMessages(ErrorLogger *errorLogger, const Settings *settings) const {
         CheckUninitVar c(nullptr, settings, errorLogger);
 

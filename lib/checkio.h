@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -131,7 +131,6 @@ private:
     void invalidPrintfArgTypeError_s(const Token* tok, unsigned int numFormat, const ArgumentInfo* argInfo);
     void invalidPrintfArgTypeError_n(const Token* tok, unsigned int numFormat, const ArgumentInfo* argInfo);
     void invalidPrintfArgTypeError_p(const Token* tok, unsigned int numFormat, const ArgumentInfo* argInfo);
-    void invalidPrintfArgTypeError_int(const Token* tok, unsigned int numFormat, const std::string& specifier, const ArgumentInfo* argInfo);
     void invalidPrintfArgTypeError_uint(const Token* tok, unsigned int numFormat, const std::string& specifier, const ArgumentInfo* argInfo);
     void invalidPrintfArgTypeError_sint(const Token* tok, unsigned int numFormat, const std::string& specifier, const ArgumentInfo* argInfo);
     void invalidPrintfArgTypeError_float(const Token* tok, unsigned int numFormat, const std::string& specifier, const ArgumentInfo* argInfo);
@@ -158,7 +157,6 @@ private:
         c.invalidPrintfArgTypeError_s(nullptr,  1, nullptr);
         c.invalidPrintfArgTypeError_n(nullptr,  1, nullptr);
         c.invalidPrintfArgTypeError_p(nullptr,  1, nullptr);
-        c.invalidPrintfArgTypeError_int(nullptr,  1, "X", nullptr);
         c.invalidPrintfArgTypeError_uint(nullptr,  1, "u", nullptr);
         c.invalidPrintfArgTypeError_sint(nullptr,  1, "i", nullptr);
         c.invalidPrintfArgTypeError_float(nullptr,  1, "f", nullptr);

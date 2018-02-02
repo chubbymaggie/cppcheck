@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,6 +35,8 @@ public:
         QString inherits;
         QString startPattern;
         QString endPattern;
+        QString opLessAllowed;
+        QString itEndPattern;
 
         bool access_arrayLike;
         int  size_templateParameter;
@@ -71,6 +73,15 @@ public:
         bool gccConst;
         bool leakignore;
         bool useretval;
+        struct ReturnValue {
+            ReturnValue() : container(-1) {}
+            QString type;
+            QString value;
+            int container;
+            bool empty() const {
+                return type.isNull() && value.isNull() && container < 0;
+            }
+        } returnValue;
         struct {
             QString scan;
             QString secure;
@@ -83,6 +94,8 @@ public:
             QString name;
             unsigned int nr;
             static const unsigned int ANY;
+            static const unsigned int VARIADIC;
+            QString defaultValue;
             bool notbool;
             bool notnull;
             bool notuninit;
@@ -95,17 +108,24 @@ public:
                 QString arg2;
             };
             QList<struct MinSize> minsizes;
+            struct Iterator {
+                Iterator() : container(-1) {}
+                int container;
+                QString type;
+            } iterator;
         };
         QList<struct Arg> args;
 
         struct {
             QString severity;
+            QString cstd;
             QString reason;
             QString alternatives;
             QString msg;
 
             bool isEmpty() const {
-                return severity.isEmpty() &&
+                return cstd.isEmpty() &&
+                       severity.isEmpty() &&
                        reason.isEmpty() &&
                        alternatives.isEmpty() &&
                        msg.isEmpty();
@@ -132,13 +152,23 @@ public:
     };
 
     void clear() {
+        containers.clear();
         defines.clear();
         functions.clear();
         memoryresource.clear();
         podtypes.clear();
     }
 
-    bool open(QIODevice &file);
+
+    void swap(CppcheckLibraryData &other) {
+        containers.swap(other.containers);
+        defines.swap(other.defines);
+        functions.swap(other.functions);
+        memoryresource.swap(other.memoryresource);
+        podtypes.swap(other.podtypes);
+    }
+
+    QString open(QIODevice &file);
     QString toString() const;
 
     QList<struct Container> containers;

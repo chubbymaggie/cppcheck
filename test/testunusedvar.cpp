@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -51,6 +51,7 @@ private:
         TEST_CASE(structmember11); // #4168 - initialization with {} / passed by address to unknown function
         TEST_CASE(structmember12); // #7179 - FP unused structmember
         TEST_CASE(structmember13); // #3088 - __attribute__((packed))
+        TEST_CASE(structmember14); // #6508 - (struct x){1,2,..}
         TEST_CASE(structmember_sizeof);
 
         TEST_CASE(localvar1);
@@ -436,6 +437,14 @@ private:
         checkStructMemberUsage("struct S {\n"
                                "  int x;\n"
                                "} __attribute__((packed));");
+        ASSERT_EQUALS("", errout.str());
+    }
+
+    void structmember14() { // #6508
+        checkStructMemberUsage("struct bstr { char *bstart; size_t len; };\n"
+                               "struct bstr bstr0(void) {\n"
+                               "  return (struct bstr){\"hello\",6};\n"
+                               "}");
         ASSERT_EQUALS("", errout.str());
     }
 

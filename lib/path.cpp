@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -224,4 +224,19 @@ std::string Path::getAbsoluteFilePath(const std::string& filePath)
 #error Platform absolute path function needed
 #endif
     return absolute_path;
+}
+
+std::string Path::stripDirectoryPart(const std::string &file)
+{
+#if defined(_WIN32) && !defined(__MINGW32__)
+    const char native = '\\';
+#else
+    const char native = '/';
+#endif
+
+    const std::string::size_type p = file.rfind(native);
+    if (p != std::string::npos) {
+        return file.substr(p + 1);
+    }
+    return file;
 }

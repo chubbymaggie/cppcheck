@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,8 +25,10 @@
 #include <QInputDialog>
 #include <QDir>
 #include <QSettings>
+#include <QProcess>
 #include "common.h"
 #include "projectfiledialog.h"
+#include "checkthread.h"
 #include "projectfile.h"
 #include "library.h"
 #include "cppcheck.h"
@@ -37,6 +39,8 @@ ProjectFileDialog::ProjectFileDialog(ProjectFile *projectFile, QWidget *parent)
     , mProjectFile(projectFile)
 {
     mUI.setupUi(this);
+
+    mUI.mToolClangAnalyzer->hide();
 
     const QFileInfo inf(projectFile->getFilename());
     QString filename = inf.fileName();
@@ -132,6 +136,15 @@ void ProjectFileDialog::saveSettings() const
     settings.setValue(SETTINGS_PROJECT_DIALOG_HEIGHT, size().height());
 }
 
+static void updateAddonCheckBox(QCheckBox *cb, const ProjectFile *projectFile, const QString &dataDir, const QString &addon)
+{
+    cb->setChecked(projectFile->getAddons().contains(addon));
+    if (CheckThread::getAddonFilePath(dataDir, addon + ".py").isEmpty()) {
+        cb->setEnabled(false);
+        cb->setText(cb->text() + QObject::tr(" (Not found)"));
+    }
+}
+
 void ProjectFileDialog::loadFromProjectFile(const ProjectFile *projectFile)
 {
     setRootPath(projectFile->getRootPath());
@@ -144,11 +157,23 @@ void ProjectFileDialog::loadFromProjectFile(const ProjectFile *projectFile)
     setExcludedPaths(projectFile->getExcludedPaths());
     setLibraries(projectFile->getLibraries());
     setSuppressions(projectFile->getSuppressions());
-    mUI.mAddonThreadSafety->setChecked(projectFile->getAddons().contains("threadsafety"));
+
+    QSettings settings;
+    const QString dataDir = settings.value("DATADIR", QString()).toString();
+    updateAddonCheckBox(mUI.mAddonThreadSafety, projectFile, dataDir, "threadsafety");
+    updateAddonCheckBox(mUI.mAddonY2038, projectFile, dataDir, "y2038");
+    updateAddonCheckBox(mUI.mAddonCert, projectFile, dataDir, "cert");
+    updateAddonCheckBox(mUI.mAddonMisra, projectFile, dataDir, "misra");
+
     mUI.mAddonY2038->setChecked(projectFile->getAddons().contains("y2038"));
     mUI.mAddonCert->setChecked(projectFile->getAddons().contains("cert"));
+    mUI.mAddonMisra->setChecked(projectFile->getAddons().contains("misra"));
     mUI.mToolClangAnalyzer->setChecked(projectFile->getClangAnalyzer());
     mUI.mToolClangTidy->setChecked(projectFile->getClangTidy());
+    if (CheckThread::clangTidyCmd().isEmpty()) {
+        mUI.mToolClangTidy->setText(tr("Clang-tidy (not found)"));
+        mUI.mToolClangTidy->setEnabled(false);
+    }
     QString tags;
     foreach (const QString tag, projectFile->getTags()) {
         if (tags.isEmpty())
@@ -179,6 +204,8 @@ void ProjectFileDialog::saveToProjectFile(ProjectFile *projectFile) const
         list << "y2038";
     if (mUI.mAddonCert->isChecked())
         list << "cert";
+    if (mUI.mAddonMisra->isChecked())
+        list << "misra";
     projectFile->setAddons(list);
     projectFile->setClangAnalyzer(mUI.mToolClangAnalyzer->isChecked());
     projectFile->setClangTidy(mUI.mToolClangTidy->isChecked());

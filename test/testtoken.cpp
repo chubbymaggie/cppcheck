@@ -1,6 +1,6 @@
 /*
  * Cppcheck - A tool for static C/C++ code analysis
- * Copyright (C) 2007-2016 Cppcheck team.
+ * Copyright (C) 2007-2017 Cppcheck team.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -96,6 +96,7 @@ private:
         TEST_CASE(canFindMatchingBracketsOuterPair);
         TEST_CASE(canFindMatchingBracketsWithTooManyClosing);
         TEST_CASE(canFindMatchingBracketsWithTooManyOpening);
+        TEST_CASE(findClosingBracket);
 
         TEST_CASE(expressionString);
     }
@@ -946,6 +947,13 @@ private:
 
         t = var.tokens()->tokAt(4)->findClosingBracket();
         ASSERT(t == nullptr);
+    }
+
+    void findClosingBracket() {
+        givenACodeSampleToTokenize var("template<typename X, typename...Y> struct S : public Fred<Wilma<Y...>> {}");
+
+        const Token* t = var.tokens()->next()->findClosingBracket();
+        ASSERT(Token::simpleMatch(t, "> struct"));
     }
 
     void expressionString() {
